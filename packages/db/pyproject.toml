@@ -1,0 +1,16 @@
+[project]
+name = "db"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "AlixPa", email = "81264144+AlixPa@users.noreply.github.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.19.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.25,<0.10.0"]
+build-backend = "uv_build"
