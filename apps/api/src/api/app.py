@@ -3,13 +3,11 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import APIRouter, FastAPI
 
-from api.routers import (
-    batches_router,
-    chat_completions_router,
-    completions_router,
-    files_router,
-    health_router,
-)
+from api.batches import batches_router
+from api.chat import chat_completions_router
+from api.completions import completions_router
+from api.files import files_router
+from api.health import health_router
 
 
 @asynccontextmanager
