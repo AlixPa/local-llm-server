@@ -1,7 +1,7 @@
 import httpx
 from fastapi import APIRouter, Request, Response
 
-from api.config import OLLAMA_URL
+from api.config.constants import OLLAMA_URL
 
 completions_router = APIRouter(prefix="/completions")
 

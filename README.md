@@ -14,3 +14,19 @@ ollama serve
 # Add models
 ollama pull qwen3.5:9b
 ```
+
+# Alembic
+
+```sh
+# Create migration from models
+cd packages/db
+uv run --project packages/db alembic revision --autogenerate -m "desc"
+
+# Create empty migration file
+cd packages/db
+uv run --project packages/db alembic revision -m "desc"
+
+# Apply migrations
+cd packages/db
+uv run --project packages/db alembic upgrade head
+```

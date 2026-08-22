@@ -1,6 +1,7 @@
 from logging.config import fileConfig
 
 from alembic import context
+from db.config import POSTGRES_SYNC_URL
 from db.models.base import Base
 from sqlalchemy import engine_from_config, pool
 
@@ -56,14 +57,21 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    configuration = context.config.get_section(context.config.config_ini_section, {})
+    configuration["sqlalchemy.url"] = POSTGRES_SYNC_URL
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_schemas=True,
+        )
 
         with context.begin_transaction():
             context.run_migrations()
