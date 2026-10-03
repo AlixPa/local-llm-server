@@ -48,6 +48,7 @@ mypy_path = [
     "$MYPY_CONFIG_FILE_DIR/apps/api/src",
     "$MYPY_CONFIG_FILE_DIR/packages/db/src",
     "$MYPY_CONFIG_FILE_DIR/packages/llm/src",
+    "$MYPY_CONFIG_FILE_DIR/apps/api/tests",
 ]
 # generated code
 exclude = ["packages/db/alembic/"]

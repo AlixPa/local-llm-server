@@ -33,13 +33,9 @@ def error_routes(test_app: FastAPI) -> Iterator[None]:
     test_app.add_api_route("/v1/_test/boom", boom)
     test_app.add_api_route("/v1/_test/api-error", api_error)
     test_app.add_api_route("/v1/_test/body", create, methods=["POST"])
-    test_app.add_api_route("/v1/chat/completions", create, methods=["POST"])
     yield
     test_app.router.routes[:] = [
-        r
-        for r in test_app.router.routes
-        if "/_test/" not in getattr(r, "path", "")
-        and getattr(r, "path", "") != "/v1/chat/completions"
+        r for r in test_app.router.routes if "/_test/" not in getattr(r, "path", "")
     ]
 
 
@@ -111,9 +107,9 @@ async def test_api_error(
 async def test_validation_error_on_openai_path_is_400(
     client: AsyncClient, validate_schema: Callable[[Any, str], None]
 ) -> None:
-    response = await client.post("/v1/chat/completions", json={"count": "abc"})
+    response = await client.post("/v1/chat/completions", json={"messages": "abc"})
     error = await _check(response, validate_schema, 400, "invalid_request_error", None)
-    assert error["param"] == "count"
+    assert error["param"] == "messages"
 
 
 async def test_validation_error_on_other_path_stays_422(

@@ -6,9 +6,11 @@ from fastapi import APIRouter, FastAPI
 from llm.client import OllamaClient
 from llm.config import OllamaSettings
 
+from api.chat import router as chat_router
 from api.errors import register_error_handlers
 from api.health import router as health_router
 from api.logging import configure_logging
+from api.models import router as models_router
 
 configure_logging()
 
@@ -25,4 +27,6 @@ register_error_handlers(app)
 
 v1_router = APIRouter(prefix="/v1")
 v1_router.include_router(health_router)
+v1_router.include_router(chat_router)
+v1_router.include_router(models_router)
 app.include_router(v1_router)

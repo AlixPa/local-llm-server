@@ -44,6 +44,7 @@ def _raise_for_status(response: httpx.Response, body: bytes) -> None:
 class OllamaClient:
     def __init__(self, client: httpx.AsyncClient, settings: OllamaSettings) -> None:
         self._client = client
+        self.num_ctx = settings.num_ctx
         self._url = f"{settings.host.rstrip('/')}/api/chat"
 
     def _body(self, request: OllamaChatRequest, *, stream: bool) -> bytes:

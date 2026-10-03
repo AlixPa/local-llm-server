@@ -1,5 +1,4 @@
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
-from dataclasses import dataclass, field
+from collections.abc import AsyncIterator, Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +14,7 @@ from httpx import ASGITransport, AsyncClient, MockTransport, Request, Response
 from jsonschema import validate
 from llm.client import OllamaClient
 from llm.config import OllamaSettings
+from ollama_fakes import OllamaMock
 from openapi_core import Config, OpenAPI
 from openapi_core.testing import MockRequest, MockResponse
 from sqlalchemy.ext.asyncio import (
@@ -60,19 +60,6 @@ async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
         )
         await session.commit()
         yield session
-
-
-type OllamaHandler = Callable[[Request], Response | Awaitable[Response]]
-
-
-def _unconfigured(request: Request) -> Response:
-    raise AssertionError(f"unexpected Ollama call: {request.url}")
-
-
-@dataclass
-class OllamaMock:
-    handler: OllamaHandler = field(default=_unconfigured)
-    requests: list[Request] = field(default_factory=list[Request])
 
 
 @pytest.fixture
