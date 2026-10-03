@@ -12,6 +12,7 @@ dependencies = [
     "db",
     "fastapi>=0.141.1",
     "llm",
+    "sse-starlette>=3.5.0",
     "uvicorn>=0.54.0",
 ]
 

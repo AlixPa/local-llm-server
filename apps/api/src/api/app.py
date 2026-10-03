@@ -14,6 +14,7 @@ from api.errors import register_error_handlers
 from api.health import router as health_router
 from api.logging import configure_logging
 from api.models import router as models_router
+from api.observability import router as observability_router
 from api.observability.tracing import TracingMiddleware, hub, writer
 
 configure_logging()
@@ -43,4 +44,5 @@ v1_router.include_router(health_router)
 v1_router.include_router(chat_router)
 v1_router.include_router(models_router)
 v1_router.include_router(analytics_router)
+v1_router.include_router(observability_router)
 app.include_router(v1_router)

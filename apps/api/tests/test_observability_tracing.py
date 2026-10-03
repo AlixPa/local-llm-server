@@ -4,6 +4,7 @@ import re
 from collections.abc import Awaitable, Callable
 
 import httpx
+import pytest
 from api.observability.tracing import Trace, get_trace, writer
 from db.models import (
     Participant,
@@ -13,6 +14,7 @@ from db.models import (
     TraceOutcome,
     WorkflowStep,
 )
+from db.repositories import tracing as tracing_repo
 from httpx import AsyncClient, Request, Response
 from ollama_fakes import (
     OllamaMock,
@@ -283,3 +285,55 @@ async def test_noop_trace_accumulates_nothing() -> None:
     assert trace.outcome is None
     assert trace.errors == []
     assert trace._closers == []
+
+
+async def test_validation_rejection_records_request_and_error_only(
+    client: AsyncClient, trace_writer: None, read_traces: ReadTraces
+) -> None:
+    response = await client.post("/v1/chat/completions", json={"model": MODEL})
+
+    assert response.status_code == 400
+    [(request, steps)] = await read_traces()
+    assert request.outcome is TraceOutcome.ERROR
+    assert request.http_status == 400
+    assert request.error_message == response.json()["error"]["message"]
+    assert [s.kind for s in steps] == [StepKind.REQUEST_RECEIVED, StepKind.ERROR]
+    assert steps[1].source is Participant.API
+    assert steps[1].destination is Participant.CLIENT
+
+
+async def test_unknown_model_records_request_and_error_only(
+    client: AsyncClient, trace_writer: None, read_traces: ReadTraces
+) -> None:
+    response = await client.post(
+        "/v1/chat/completions", json={**MINIMAL, "model": "no-such-model"}
+    )
+
+    assert response.status_code == 404
+    [(request, steps)] = await read_traces()
+    assert request.outcome is TraceOutcome.ERROR
+    assert request.error_message
+    assert [s.kind for s in steps] == [StepKind.REQUEST_RECEIVED, StepKind.ERROR]
+
+
+async def test_recording_failure_does_not_affect_the_request(
+    client: AsyncClient,
+    ollama_mock: OllamaMock,
+    trace_writer: None,
+    read_traces: ReadTraces,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ollama_mock.handler = lambda _: chat_response("Hello")
+
+    async def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(tracing_repo, "add_steps", broken)
+
+    response = await client.post("/v1/chat/completions", json=MINIMAL)
+
+    assert response.status_code == 200
+    assert response.json()["choices"][0]["message"]["content"] == "Hello"
+    [(request, steps)] = await read_traces()
+    assert request.outcome is TraceOutcome.SUCCESS
+    assert steps == []

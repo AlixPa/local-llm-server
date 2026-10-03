@@ -89,6 +89,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/observability/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Requests */
+        get: operations["list_requests_v1_observability_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/observability/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Events */
+        get: operations["stream_events_v1_observability_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -788,6 +822,51 @@ export interface components {
          * @enum {string}
          */
         ToolChoiceMode: "none" | "auto" | "required";
+        /**
+         * TraceOutcome
+         * @enum {string}
+         */
+        TraceOutcome: "in_progress" | "success" | "error" | "canceled" | "interrupted";
+        /** TracedRequestItem */
+        TracedRequestItem: {
+            /** Id */
+            id: number;
+            /** Endpoint */
+            endpoint: string;
+            /** Method */
+            method: string;
+            /** Started At */
+            started_at: number;
+            /** Started At Ms */
+            started_at_ms: number;
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Http Status */
+            http_status: number | null;
+            outcome: components["schemas"]["TraceOutcome"];
+            /** Summary */
+            summary: string | null;
+            /** Response Id */
+            response_id: string | null;
+            /** Error Message */
+            error_message: string | null;
+        };
+        /** TracedRequestList */
+        TracedRequestList: {
+            /**
+             * Object
+             * @constant
+             */
+            object: "list";
+            /** Data */
+            data: components["schemas"]["TracedRequestItem"][];
+            /** First Id */
+            first_id: number | null;
+            /** Last Id */
+            last_id: number | null;
+            /** Has More */
+            has_more: boolean;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -962,6 +1041,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatCompletionAnalyticsSummary"];
+                };
+            };
+        };
+    };
+    list_requests_v1_observability_requests_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                after?: number | null;
+                endpoint?: string | null;
+                outcome?: components["schemas"]["TraceOutcome"][] | null;
+                since?: number | null;
+                until?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TracedRequestList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_events_v1_observability_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
