@@ -144,11 +144,12 @@ description: "Task list for Backend Observability Tab"
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T045 [P] Ruff lint + format and `mypy` on the whole Python workspace; fix findings (no new `# type: ignore` without a WHY comment)
-- [ ] T046 [P] `pnpm check`, `pnpm typecheck`, `pnpm test` in `apps/web`; fix findings
-- [ ] T047 Run `uv run pytest` (full backend suite incl. existing chat/contract tests, proving the middleware doesn't alter existing behavior) and `pre-commit run --all-files`
+- [X] T045 [P] Ruff lint + format and `mypy` on the whole Python workspace; fix findings (no new `# type: ignore` without a WHY comment)
+- [X] T046 [P] `pnpm check`, `pnpm typecheck`, `pnpm test` in `apps/web`; fix findings
+- [X] T047 Run `uv run pytest` (full backend suite incl. existing chat/contract tests, proving the middleware doesn't alter existing behavior) and `pre-commit run --all-files`
 - [ ] T048 Walk through `quickstart.md` manual scenarios 1–11 against a real Ollama (incl. SC-002: request → Ollama payload/response in ≤ 3 clicks; incl. scenario 10 latency within 5 %, scenario 7 `kill -9` restart, scenario 8 reconnect) and note any deviations
-- [ ] T049 README: update only if setup/run steps changed (migration command or new env var). Expected: no change, skip if so
+  - T048 status (NOT ticked; API-level walkthrough done against real Ollama qwen3.5:9b with a scratch DB, no browser/UI pass): verified via curl: 1 (rows listed, outcomes), 2 (steps request_received/sent_to_ollama/received_from_ollama/response_returned via detail API), 3 (missing messages, unknown model, Ollama stopped -> 503, received_from_ollama failed + error step), 4 (client abort -> canceled, Ollama step canceled with partial content), 6 (/v1/models, /v1/health add no rows), 7 (kill -9 mid-stream + restart -> request and open step `interrupted`, earlier rows intact), 9 (unit tests), 10 (22 reps x2 alternating: total 0.699/0.709 s traced vs 0.725/0.696 s with TRACKED emptied; TTFT 0.199/0.200 vs 0.203/0.198; within 5 %), 11 (20k rows: first page ~2-19 ms, detail ~1.5-3 ms, filtered ~2 ms). Not verified in a real browser: UI parts of 1/2 (<=3 clicks, truncation toggle), 5 (filter/pause UI), 8 (disconnected indicator; server side only checked that /events reconnects after restart and the new row is listed). Covered by Vitest only.
+- [X] T049 README: update only if setup/run steps changed (migration command or new env var). Expected: no change, skip if so
 
 ---
 
