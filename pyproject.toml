@@ -43,6 +43,12 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
 
 [tool.mypy]
 strict = true
+explicit_package_bases = true
+mypy_path = [
+    "$MYPY_CONFIG_FILE_DIR/apps/api/src",
+    "$MYPY_CONFIG_FILE_DIR/packages/db/src",
+    "$MYPY_CONFIG_FILE_DIR/packages/llm/src",
+]
 # generated code
 exclude = ["packages/db/alembic/"]
 

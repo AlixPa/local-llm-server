@@ -1,15 +1,20 @@
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
 from api.app import app
-from db.engine import clear_caches, get_session
-from db.models import Base
+from api.dependencies import get_ollama_client, get_session
+from db.engine import clear_caches
+from db.models import Base, Model
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient, Response
+from httpx import ASGITransport, AsyncClient, MockTransport, Request, Response
 from jsonschema import validate
+from llm.client import OllamaClient
+from llm.config import OllamaSettings
 from openapi_core import Config, OpenAPI
 from openapi_core.testing import MockRequest, MockResponse
 from sqlalchemy.ext.asyncio import (
@@ -45,15 +50,53 @@ async def engine() -> AsyncIterator[AsyncEngine]:
 @pytest.fixture
 async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+        # Tables come from metadata, so the migration's seed row is absent
+        session.add(
+            Model(
+                external_id="qwen3.5:9b",
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                owned_by="qwen",
+            )
+        )
+        await session.commit()
         yield session
 
 
+type OllamaHandler = Callable[[Request], Response | Awaitable[Response]]
+
+
+def _unconfigured(request: Request) -> Response:
+    raise AssertionError(f"unexpected Ollama call: {request.url}")
+
+
+@dataclass
+class OllamaMock:
+    handler: OllamaHandler = field(default=_unconfigured)
+    requests: list[Request] = field(default_factory=list[Request])
+
+
 @pytest.fixture
-def test_app(session: AsyncSession) -> Iterator[FastAPI]:
+def ollama_mock() -> OllamaMock:
+    return OllamaMock()
+
+
+@pytest.fixture
+def ollama_client(ollama_mock: OllamaMock) -> OllamaClient:
+    async def handle(request: Request) -> Response:
+        ollama_mock.requests.append(request)
+        result = ollama_mock.handler(request)
+        return result if isinstance(result, Response) else await result
+
+    return OllamaClient(AsyncClient(transport=MockTransport(handle)), OllamaSettings())
+
+
+@pytest.fixture
+def test_app(session: AsyncSession, ollama_client: OllamaClient) -> Iterator[FastAPI]:
     async def override() -> AsyncIterator[AsyncSession]:
         yield session
 
     app.dependency_overrides[get_session] = override
+    app.dependency_overrides[get_ollama_client] = lambda: ollama_client
     yield app
     app.dependency_overrides.clear()
 

@@ -2,10 +2,16 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
+from api.errors import ApiError
 from fastapi import FastAPI
 from httpx import AsyncClient
+from pydantic import BaseModel
 
 ENVELOPE_KEYS = {"message", "type", "param", "code"}
+
+
+class Body(BaseModel):
+    count: int
 
 
 @pytest.fixture(autouse=True)
@@ -17,10 +23,23 @@ def error_routes(test_app: FastAPI) -> Iterator[None]:
         raise RuntimeError("boom")
 
     test_app.add_api_route("/v1/_test/typed", typed)
+
+    async def api_error() -> None:
+        raise ApiError(404, "invalid_request_error", "model_not_found", None, "nope")
+
+    async def create(body: Body) -> Body:
+        return body
+
     test_app.add_api_route("/v1/_test/boom", boom)
+    test_app.add_api_route("/v1/_test/api-error", api_error)
+    test_app.add_api_route("/v1/_test/body", create, methods=["POST"])
+    test_app.add_api_route("/v1/chat/completions", create, methods=["POST"])
     yield
     test_app.router.routes[:] = [
-        r for r in test_app.router.routes if "/_test/" not in getattr(r, "path", "")
+        r
+        for r in test_app.router.routes
+        if "/_test/" not in getattr(r, "path", "")
+        and getattr(r, "path", "") != "/v1/chat/completions"
     ]
 
 
@@ -76,3 +95,35 @@ async def test_unhandled_exception(
 ) -> None:
     response = await client.get("/v1/_test/boom")
     await _check(response, validate_schema, 500, "server_error", None)
+
+
+async def test_api_error(
+    client: AsyncClient, validate_schema: Callable[[Any, str], None]
+) -> None:
+    response = await client.get("/v1/_test/api-error")
+    error = await _check(
+        response, validate_schema, 404, "invalid_request_error", "model_not_found"
+    )
+    assert error["param"] is None
+    assert error["message"] == "nope"
+
+
+async def test_validation_error_on_openai_path_is_400(
+    client: AsyncClient, validate_schema: Callable[[Any, str], None]
+) -> None:
+    response = await client.post("/v1/chat/completions", json={"count": "abc"})
+    error = await _check(response, validate_schema, 400, "invalid_request_error", None)
+    assert error["param"] == "count"
+
+
+async def test_validation_error_on_other_path_stays_422(
+    client: AsyncClient, validate_schema: Callable[[Any, str], None]
+) -> None:
+    response = await client.post("/v1/_test/body", json={"count": "abc"})
+    await _check(
+        response,
+        validate_schema,
+        422,
+        "invalid_request_error",
+        "unprocessable_content",
+    )
