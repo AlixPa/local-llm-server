@@ -1,32 +1,19 @@
-# Running api server
+# local-llm-server
+
+Prerequisites: [uv](https://docs.astral.sh/uv/) and Python 3.14. Run every command from the
+repo root.
 
 ```sh
-cd <root>
-uv run --project apps/api uvicorn api.app:app --host 0.0.0.0 --port 8000 --log-config apps/api/log_config.yaml --reload-dir apps/api
+uv sync
+cp .env.example .env
+uv run pre-commit install
+uv run alembic -c packages/db/alembic.ini upgrade head
+uv run uvicorn api.app:app --reload
+uv run pytest
 ```
 
-# Ollama
+## Configuration
 
-```sh
-# Server ollama
-ollama serve
-
-# Add models
-ollama pull qwen3.5:9b
-```
-
-# Alembic
-
-```sh
-# Create migration from models
-cd packages/db
-uv run --project packages/db alembic revision --autogenerate -m "desc"
-
-# Create empty migration file
-cd packages/db
-uv run --project packages/db alembic revision -m "desc"
-
-# Apply migrations
-cd packages/db
-uv run --project packages/db alembic upgrade head
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOCAL_LLM_DB_PATH` | `data/local_llm.db` | SQLite file, relative to the working directory |

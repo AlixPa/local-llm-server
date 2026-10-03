@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 
-health_router = APIRouter(prefix="/health")
+from api.health.schemas import HealthResponse
+
+router = APIRouter()
 
 
-@health_router.get("")
-async def get_health(request: Request):
-    return {"status": "ok"}
+@router.get("/health")
+async def get_health() -> HealthResponse:
+    return HealthResponse(status="ok")
