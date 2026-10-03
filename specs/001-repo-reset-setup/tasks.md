@@ -75,11 +75,11 @@ description: "Task list for Repository Reset & Foundation Setup"
 
 **Independent Test**: quickstart outcome 5.
 
-- [ ] T023 [US3] Create `.pre-commit-config.yaml` following standard practice: `astral-sh/ruff-pre-commit` pinned to the locked ruff version (`ruff-check` with `--fix --exit-non-zero-on-fix`, and `ruff-format`) on staged Python files (including Alembic); `pre-commit-hooks` (`trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-toml`, `check-merge-conflict`, `check-added-large-files` with `--maxkb` above the vendored spec's size) excluding `^openai-spec/`; and one `repo: local` mypy hook (`language: system`, `entry: uv run mypy`, `types: [python]`, filenames passed, `exclude: ^packages/db/alembic/`)
-- [ ] T024 [US3] Run `uv run ruff format .`, `uv run ruff check --fix .`, and `uv run mypy` (config from T001, which already excludes `alembic/`); fix all findings in non-generated code without adding unexplained `# type: ignore`
-- [ ] T025 [US3] Run `uv run pre-commit install` then `uv run pre-commit run --all-files`; confirm pass; also stage only a markdown change and confirm the Python hooks are skipped
-- [ ] T026 [US3] Verify the gate blocks violations: stage a temporary file with an unused import and a missing type annotation, confirm `pre-commit run` fails, then delete the file (do not commit)
-- [ ] T027 [P] [US3] Confirm `uv run pytest` excludes `integration`-marked tests by default: add a trivial `@pytest.mark.integration` test in `apps/api/tests/test_integration_marker.py` that is deselected, and `uv run pytest -m integration --collect-only` collects it. Delete this file if a real integration test is not wanted yet (marker stays registered)
+- [X] T023 [US3] Create `.pre-commit-config.yaml` following standard practice: `astral-sh/ruff-pre-commit` pinned to the locked ruff version (`ruff-check` with `--fix --exit-non-zero-on-fix`, and `ruff-format`) on staged Python files (including Alembic); `pre-commit-hooks` (`trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-toml`, `check-merge-conflict`, `check-added-large-files` with `--maxkb` above the vendored spec's size) excluding `^openai-spec/`; and one `repo: local` mypy hook (`language: system`, `entry: uv run mypy`, `types: [python]`, filenames passed, `exclude: ^packages/db/alembic/`)
+- [X] T024 [US3] Run `uv run ruff format .`, `uv run ruff check --fix .`, and `uv run mypy` (config from T001, which already excludes `alembic/`); fix all findings in non-generated code without adding unexplained `# type: ignore`
+- [X] T025 [US3] Run `uv run pre-commit install` then `uv run pre-commit run --all-files`; confirm pass; also stage only a markdown change and confirm the Python hooks are skipped
+- [X] T026 [US3] Verify the gate blocks violations: stage a temporary file with an unused import and a missing type annotation, confirm `pre-commit run` fails, then delete the file (do not commit)
+- [X] T027 [P] [US3] Confirm `uv run pytest` excludes `integration`-marked tests by default: add a trivial `@pytest.mark.integration` test in `apps/api/tests/test_integration_marker.py` that is deselected, and `uv run pytest -m integration --collect-only` collects it. Delete this file if a real integration test is not wanted yet (marker stays registered)
 
 ---
 
