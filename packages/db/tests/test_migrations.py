@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from db.config import get_settings
+from db.engine import clear_caches
 
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 
@@ -14,7 +14,7 @@ def test_upgrade_head_creates_empty_database(
 ) -> None:
     db_path = tmp_path / "data" / "migrated.db"
     monkeypatch.setenv("LOCAL_LLM_DB_PATH", str(db_path))
-    get_settings.cache_clear()
+    clear_caches()
 
     command.upgrade(Config(str(ALEMBIC_INI)), "head")
 
@@ -25,4 +25,4 @@ def test_upgrade_head_creates_empty_database(
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
     assert tables == {"alembic_version"}
-    get_settings.cache_clear()
+    clear_caches()

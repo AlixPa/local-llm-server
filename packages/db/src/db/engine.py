@@ -36,3 +36,14 @@ def get_sync_engine() -> Engine:
 @lru_cache
 def get_sync_session_factory() -> sessionmaker[Session]:
     return sessionmaker(get_sync_engine(), expire_on_commit=False)
+
+
+def clear_caches() -> None:
+    for cached in (
+        get_settings,
+        get_async_engine,
+        get_async_session_factory,
+        get_sync_engine,
+        get_sync_session_factory,
+    ):
+        cached.cache_clear()

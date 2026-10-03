@@ -5,8 +5,7 @@ from typing import Any
 import pytest
 import yaml
 from api.app import app
-from db.config import get_settings
-from db.engine import get_session
+from db.engine import clear_caches, get_session
 from db.models import Base
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -27,9 +26,9 @@ def settings_override(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> Iterator[None]:
     monkeypatch.setenv("LOCAL_LLM_DB_PATH", str(tmp_path / "test.db"))
-    get_settings.cache_clear()
+    clear_caches()
     yield
-    get_settings.cache_clear()
+    clear_caches()
 
 
 @pytest.fixture
