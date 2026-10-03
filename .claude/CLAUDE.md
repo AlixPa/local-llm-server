@@ -185,9 +185,12 @@ two toolchains do not mix.
 
 - **ORM naming**: singular PascalCase model class → plural snake_case table, e.g.
   `class BatchJob(Base): __tablename__ = "batch_jobs"`.
-- **Primary keys**: a surrogate integer primary key, plus a separate unique-indexed external id
-  column holding the OpenAI-style string id (e.g. `id: int` PK, `external_id: str` unique). The
-  external id is what the API exposes; the integer PK is for internal joins/FKs.
+- **Primary keys**: a surrogate integer primary key everywhere. A separate unique-indexed
+  `external_id` column (the OpenAI-style string id, e.g. `id: int` PK, `external_id: str` unique)
+  exists only for resources exposed through OpenAI-defined endpoints, because that format is
+  mandated by the contract. Everything else (non-OpenAI endpoints, internal tables) uses the integer
+  PK directly, including as API id/cursor and as foreign key — string ids are slower in SQLite and
+  there is no security reason for opaque ids on a local single-user server.
 - **SQLite safeguards (already in place, don't undo)**: `Base.metadata` has a constraint naming
   convention (needed for batch migrations); Alembic runs with `render_as_batch=True`;
   every engine enables `PRAGMA foreign_keys=ON`; datetime columns use `db.types.UtcDateTime`
@@ -248,6 +251,22 @@ two toolchains do not mix.
   emits JSON — no new dependency (`structlog` etc.) for this.
 - **Format**: structured JSON logs (one JSON object per line) from both the API process and
   batch workers, so logs are machine-parseable for later tooling/dashboards.
+- **API-point-of-view tracing**: besides the LLM-point-of-view records, interactions of
+  *valuable* endpoints (request received, calls to Ollama and their responses, response returned)
+  are recorded in the DB so workflows can be followed. Be selective: track endpoints like chat
+  completions, not model listing, analytics, or health. Every new endpoint's spec MUST decide
+  whether it is tracked (extend the schema or reuse the generic tracing tables) and whether the
+  observability tab supports it — per YAGNI, decide per endpoint, don't pre-build for imagined ones.
+  - **Streams are recorded once, not per chunk**: a streaming call is stored as a single step with
+    its full assembled content when the stream ends (completed, failed, or canceled — partial
+    content kept). Never persist individual stream chunks.
+  - **Stream outcomes**: a completed stream records a `response_returned` step and outcome
+    success; a failed one records an `error` step (translated error, request `error_message`) and
+    outcome error; a canceled one records outcome canceled. Failed/canceled streams never get a
+    `response_returned` step, even though the HTTP status was already 200.
+  - **"Real-time" means milestone-level**: the observability UI updates when a request starts,
+    when a workflow step is recorded, and when the request ends — not per streamed token. History
+    is kept in full (no automatic pruning).
 - Token usage for inference requests and batch/worker orchestration state are persisted to the
   SQLite DB (constitution Principle V) — logs are for operational visibility, not the source of
   truth for status or usage accounting. Whether any other endpoint records anything is decided
