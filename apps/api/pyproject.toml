@@ -19,3 +19,8 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 db = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "openapi-core>=0.23.1",
+]
