@@ -15,6 +15,8 @@ of an actual, present need:
   validates input, calls the DB, and returns a response does not get a `service.py`.
 - No worker package/process until the batch feature is actually being built — its location and
   shape are decided then (see "Deliberately left open" below), not pre-scaffolded now.
+- No frontend state store, E2E suite, i18n, shared-component extraction, or production static
+  serving until an actual need appears (see "Frontend").
 - No speculative fields, config options, abstraction layers, or "we'll probably need this later."
 - When a convention below says "decide case-by-case" or "decided at plan time," that is YAGNI in
   practice, not a gap to fill in preemptively.
@@ -80,6 +82,9 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
 
 ## Code style & tooling
 
+This section covers the **Python** side. The frontend has its own section ("Frontend") and the
+two toolchains do not mix.
+
 - **Package manager**: `uv` workspace (root `pyproject.toml` `[tool.uv.workspace]` with members
   `apps/api`, `packages/db`, and future packages). Add/upgrade dependencies with `uv add`/
   `uv remove` scoped to the relevant package (`--project apps/api` etc., `--dev` for dev tools)
@@ -106,8 +111,8 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   - Builtin generics (`list[str]`, `dict[str, int]`), never `List`/`Dict` from `typing`.
   - f-strings only, never `%`-formatting or `.format()`.
   - `StrEnum` for closed sets of string values; `match` statements where they genuinely fit.
-- **Pre-commit hooks**: a `.pre-commit-config.yaml` at the repo root, following standard
-  pre-commit practice: pinned hook repos, hooks receive only the staged files and are filtered by
+- **Pre-commit hooks** (the frontend hooks are covered in "Frontend"): a
+  `.pre-commit-config.yaml` at the repo root, following standard pre-commit practice: pinned hook repos, hooks receive only the staged files and are filtered by
   file type, so a docs-only commit skips the Python hooks entirely. It runs Ruff (lint with
   `--fix`, and format) via `astral-sh/ruff-pre-commit`, mypy as a `uv run` local hook (so it
   sees workspace packages) on staged Python files outside Alembic, and the usual hygiene hooks
@@ -140,6 +145,9 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   generic framework errors (unknown route, wrong method, …) they follow standard HTTP
   semantics, with `code` being the snake_case HTTP reason (`not_found`,
   `method_not_allowed`) and `null` for unexpected 500s. No local enum of error kinds.
+  Request-validation failures follow the same split: **400 `invalid_request_error`** on OpenAI
+  paths (the SDK maps 400 and 422 to different exceptions), standard **422** on non-OpenAI paths.
+  (`api/errors.py` currently returns 422 everywhere — fix it with the first OpenAI endpoint.)
 - **Routing**: every endpoint — including local-only ones with no OpenAI counterpart — is
   mounted under `/v1`, no exceptions. Where an OpenAI counterpart exists, the path matches it
   exactly (e.g. `/v1/chat/completions`, `/v1/batches`, `/v1/files`). This is what makes the
@@ -172,6 +180,10 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
 - **Primary keys**: a surrogate integer primary key, plus a separate unique-indexed external id
   column holding the OpenAI-style string id (e.g. `id: int` PK, `external_id: str` unique). The
   external id is what the API exposes; the integer PK is for internal joins/FKs.
+- **SQLite safeguards (already in place, don't undo)**: `Base.metadata` has a constraint naming
+  convention (needed for batch migrations); Alembic runs with `render_as_batch=True`;
+  every engine enables `PRAGMA foreign_keys=ON`; datetime columns use `db.types.UtcDateTime`
+  (SQLite drops tzinfo; it rejects naive datetimes and restores UTC on read).
 - **Timestamps**: API responses expose integer unix timestamps (matching OpenAI's `created`
   field etc.); the underlying DB column is a proper timezone-aware `datetime`, converted to an
   int only at the API boundary (in the schema, not the model).
@@ -198,9 +210,15 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
 - **Stack**: pytest + pytest-asyncio + `httpx.AsyncClient` (via FastAPI's ASGI transport) for API
   tests.
 - **Coverage**: no enforced minimum percentage. Judge sufficiency per change, not against a gate.
-- **Contract tests (required for every new/changed OpenAI-defined endpoint)**: validate the
-  actual request/response JSON against OpenAI's vendored OpenAPI spec (see below) — this is the
-  non-negotiable minimum for Principle I compliance. Additional non-OpenAI endpoints get an
+- **Contract tests (required for every new/changed OpenAI-defined endpoint)**: send a real
+  request through the app and pass the `httpx` response to the `validate_contract` fixture
+  (`openapi-core` against OpenAI's vendored spec, see below). It checks path, method, request
+  body, status code, and response body in one call — this is the non-negotiable minimum for
+  Principle I compliance. `validate_schema(body, "SchemaName")` validates a bare body against one
+  named schema (for chunks of a stream, which `validate_contract` can't read, and for the error
+  envelope on non-OpenAI paths). The fixtures normalize the spec at load (see `conftest.py`:
+  `nullable` rewritten to the 3.1 form, discriminators dropped, auth removed); extend that
+  normalization rather than working around the spec in individual tests. Additional non-OpenAI endpoints get an
   ordinary behavior test instead. Additional unit/integration tests are added
   where the change's risk warrants them.
 - **Ollama**: mocked by default in the regular test suite — fast, deterministic, runs anywhere.
@@ -233,6 +251,85 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   (including the shared `httpx.AsyncClient` — one client reused for every request, closed on
   shutdown, never one per call) is decided when that package is planned.
 
+## Frontend
+
+A React single-page app for two things only: exercising the API endpoints (playground) and
+browsing DB-backed data (logs, token usage, batches). It is a pure client of the `/v1` HTTP API —
+it never touches SQLite, and any data it needs that no endpoint exposes means adding a (non-OpenAI)
+`/v1` endpoint first (see "Contract fidelity" above).
+
+- **Location**: `apps/web`. A standalone JS project, not a uv workspace member; the Python and JS
+  toolchains stay separate.
+- **Stack**: TypeScript (strict) + React + Vite + React Router + TanStack Query + Tailwind CSS +
+  shadcn/ui. Adding any other framework/library follows the Dependencies rule above (routine
+  additions are fine; keep it lightweight and YAGNI).
+- **Package manager**: `pnpm`, pinned via the `packageManager` field (corepack). Add/remove
+  dependencies with `pnpm add`/`pnpm remove` — never hand-edit `package.json` dependencies, never
+  `npm`/`yarn`/`bun`. The lockfile is committed. Node LTS is pinned in `.node-version` and
+  `engines`.
+- **Source layout (layer-based, deliberately unlike the backend)**: `src/components/` (incl.
+  `components/ui/` for shadcn), `src/hooks/`, `src/pages/` (one per route), `src/api/` (client,
+  query hooks, generated schema), `src/lib/` (pure helpers). Don't create a folder until it has
+  content. This is internal to the repo, so it doesn't need to mirror the backend's feature-based
+  layout.
+- **Routing**: `react-router` with all routes declared in `src/App.tsx`; one page per top-level view
+  (playground, usage, batches, logs as they are built). No file-based routing.
+- **Server state vs. client state**: all data from the API goes through TanStack Query (no
+  `useEffect` fetching). Client-only state uses React built-ins (`useState`/`useReducer`/context);
+  add a store (e.g. Zustand) only once prop-drilling concretely hurts. Polling (`refetchInterval`)
+  only for in-progress batches, stopped once they reach a terminal status.
+- **API client & types**: types are generated from the server's OpenAPI by `pnpm gen:api` into
+  `src/api/schema.d.ts` (via `openapi-typescript`), **committed**, and regenerated in the same
+  change that adds/modifies an endpoint. Never hand-write a type for an API shape. Calls go
+  through the single typed `openapi-fetch` client in `src/api/client.ts`; no per-call raw
+  `fetch` in components (the SSE stream is the one exception, since `openapi-fetch` can't stream).
+  A response middleware in `client.ts` throws an `ApiError` carrying the OpenAI error envelope's
+  `error.message`, which the UI shows as-is.
+- **Streaming**: the playground supports `stream` on/off; the SSE parser reads `data: {...}`
+  lines through the `[DONE]` sentinel and is cancellable with `AbortController`. The parser is
+  pure logic and is unit-tested.
+- **Lists**: data views paginate with the OpenAI list envelope (`data`, `has_more`, `last_id`) via
+  cursor (`after`), never by assuming offset pagination.
+- **Config**: one variable, `VITE_LOCAL_LLM_API_URL` (default `http://localhost:8000`), used by the
+  Vite dev proxy only (the client uses relative `/v1` URLs). `pnpm gen:api` reads it from the
+  shell environment, not from `.env`. `apps/web/.env.example` is committed; the real `.env` is
+  gitignored. No other config until needed.
+- **Serving**: dev only — `pnpm dev` (Vite) alongside the API, with Vite proxying `/v1` to the API
+  (no CORS config on the server). No production serving yet; if wanted later, it's decided then
+  (it must respect the "everything under `/v1`" routing rule and the no-extra-runtime-service
+  rule).
+- **Lint/format**: **Biome only** (no ESLint, no Prettier) for linting, formatting, and import
+  sorting; `pnpm check` (`biome check`) is the single command, and `pnpm check:fix` applies fixes.
+  `useSortedClasses` is a Biome nursery rule — verified working; if a Biome upgrade renames
+  or drops it, fix the config rather than disabling class sorting. Recommended rules at error level, with the a11y
+  and React rules on and Tailwind class sorting (`useSortedClasses`, covering `cn`/`cva`). Line
+  width 88, 2-space indent, double quotes, semicolons. Generated `schema.d.ts` and
+  `components/ui/` (shadcn-copied) are excluded from Biome. Fix violations rather than
+  suppressing them; a `biome-ignore` needs an explanatory comment.
+- **Type checking**: `tsc -b` (`pnpm typecheck`) with `strict: true` and `noUncheckedIndexedAccess: true`
+  (`pnpm typecheck`; Biome does not type-check). No `any` and no `as` casts / `@ts-ignore` without a comment
+  explaining why it's unavoidable. New or modified code is fully typed.
+- **Code conventions**: function components only; named exports only (default exports only where
+  a tool requires one, e.g. config files); files are kebab-case, components PascalCase, hooks
+  `use-*.ts` files exporting `useX`; `type` over `interface` unless extending; `import type` for
+  type-only imports; absolute imports via the `@/` alias to `src/`. Comments follow the same
+  minimal rule as Python: only a non-obvious WHY.
+- **UI baseline**: desktop-first, follows OS light/dark, English only, no i18n. Accessible by
+  default (semantic elements, labels, keyboard operability — enforced partly by Biome a11y).
+- **Testing**: Vitest + Testing Library + MSW (API mocked at the network layer). Same practical
+  rule as the backend: test logic or risk (SSE parsing, data shaping, key interactions), not
+  trivial wiring or shadcn wrappers. No E2E suite for now, no coverage gate. Flat `tests/`
+  directory with descriptive file names. `tests/setup.ts` starts the shared MSW server
+  (`tests/server.ts`, unhandled requests error, handlers reset per test — add handlers with
+  `server.use(...)`); component tests render through `renderWithProviders` in
+  `tests/render.tsx` (QueryClient with retries off + router + tooltip provider). Test functions are
+  imported explicitly from `vitest` (no globals).
+- **Pre-commit**: local hooks in the root `.pre-commit-config.yaml`, scoped to `apps/web/**`:
+  `biome check --write` on staged files and `pnpm typecheck`. A Python-only
+  commit skips them and vice versa. Generated schema and lockfile are excluded from Biome.
+- **Done means**: for a frontend change, `pnpm check`, `pnpm typecheck`, and `pnpm test` pass
+  (the substitute for CI, same as for Python).
+
 ## Documentation
 
 - **README**: update it only when setup/run steps actually change (adding a command, changing a
@@ -252,7 +349,7 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
 - **When Claude commits**: only when explicitly asked, per Claude Code's standard behavior.
   Claude does not commit proactively just because a task finished.
 - **Pre-commit**: the `pre-commit` framework (see "Code style & tooling") gates every commit
-  locally with Ruff + mypy — this is the project's substitute for CI for now.
+  locally with Ruff + mypy (Python) and Biome + tsc (frontend) — this is the project's substitute for CI for now.
 
 ## Spec-kit workflow & agent autonomy
 
@@ -264,7 +361,7 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   `ollama pull`, and apply Alembic migrations as part of normal task execution, without asking
   first.
 - **Dependencies**: Claude may add or upgrade a dependency within an existing workspace package
-  on its own judgment, as long as it fits the lightweight-server constraint (constitution
+  (or in `apps/web` via `pnpm add`) on its own judgment, as long as it fits the lightweight-server constraint (constitution
   Principle III) and YAGNI — no need to ask first for routine additions. Adding a new workspace
   package, or any dependency that pulls in an external runtime service (broker, queue, separate
   DB engine, etc.), requires asking first — that's an architectural decision, not a routine one.

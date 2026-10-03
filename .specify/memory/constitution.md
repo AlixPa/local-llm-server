@@ -1,4 +1,13 @@
 <!--
+Amendment 1.2.0 (2026-10-03):
+  - Technology Stack Constraints: added a React SPA frontend (endpoint testing, DB log / token
+    usage / batch browsing) linted/formatted with Biome; it consumes the API only, never SQLite directly.
+  - Principle III: frontend must stay a thin client-side SPA (no SSR framework, no extra runtime
+    service).
+  - Principle V: frontend views of usage/status MUST come from API endpoints backed by the DB.
+  - Development Workflow: frontend changes MUST pass Biome checks.
+  - Frontend stack conventions (location, build tool, package manager, etc.) live in CLAUDE.md.
+
 Amendment 1.1.0 (2026-10-03):
   - Principle I: additional non-OpenAI endpoints are allowed (no longer required to sit on a
     "distinct, clearly separated path"); OpenAI-defined endpoints must match OpenAI exactly.
@@ -64,6 +73,10 @@ requirement. Persistent state MUST be stored in SQLite; schema changes MUST go t
 migrations in `packages/db`. Prefer the standard library and the existing workspace packages over
 adding new external runtime services.
 
+The frontend (see Technology Stack Constraints) MUST be a client-side SPA served as static assets
+or by a dev server; it MUST NOT introduce an SSR framework or any additional runtime service in
+production.
+
 Rationale: the project targets a single-machine, fully local deployment; operational simplicity is
 a deliberate feature, not a shortcut to be removed later.
 
@@ -84,7 +97,8 @@ per-request token usage (prompt/completion/total) attributable to its endpoint, 
 job/worker orchestration state (queued, running, completed, failed, retried). Other endpoints
 (e.g. health checks) record only what their purpose requires. This database is the single
 source of truth for status endpoints and usage accounting — reported status MUST be derived from
-the database, not from in-memory state alone, so it survives process restarts and crashes.
+the database, not from in-memory state alone, so it survives process restarts and crashes. Any UI view of
+usage, logs, or batch status MUST be fed by API endpoints reading this database.
 
 Rationale: batch processing and worker orchestration are inherently asynchronous and
 multi-process; they must be auditable and recoverable across restarts without relying on fragile
@@ -97,6 +111,14 @@ in-memory state.
 - Persistence: SQLite, managed through the `packages/db` workspace package and Alembic migrations.
 - Batch execution: plain Python worker processes/tasks coordinated through the shared SQLite
   database — no external broker or queue service.
+- Frontend: a single-page application (SPA) built with React, living in this repository. It
+  exists to test the API endpoints and to browse database-backed data (logs, token usage, running
+  and completed batches). It MUST talk to the server only through `/v1` HTTP endpoints and MUST
+  NOT read SQLite directly. Any non-OpenAI endpoint it needs follows the additional-endpoint rules
+  of Principle I.
+- Frontend tooling: Biome is the single linter, formatter, and import sorter for the frontend
+  code (no ESLint or Prettier); TypeScript in strict mode is the type checker; Vitest is the test
+  runner. Concrete conventions live in `.claude/CLAUDE.md`.
 - Dependency management: the `uv` workspace (`apps/api`, `packages/db`, and future packages).
   New runtime dependencies that fall outside this workspace model require explicit discussion
   before being added.
@@ -110,6 +132,9 @@ in-memory state.
 - A database schema change MUST ship with its Alembic migration in the same change (Principle III,
   Principle V).
 
+- Frontend changes MUST pass Biome checks, the TypeScript type check, and the frontend tests
+  before merging.
+
 ## Governance
 
 This constitution supersedes other project conventions and prior practice when they conflict.
@@ -122,4 +147,4 @@ attention to Principle II (local-only inference) and Principle IV (live-request 
 deviation MUST be called out explicitly and justified in the relevant spec or plan rather than left
 implicit.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
+**Version**: 1.2.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
