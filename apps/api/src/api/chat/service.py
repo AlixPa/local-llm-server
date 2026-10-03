@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+import anyio
 from db.models import ChatCompletionStatus
 from db.repositories import chat_completions as chat_completions_repo
 from db.repositories import models as models_repo
@@ -309,8 +310,11 @@ async def _record_shielded(
     response: dict[str, Any] | None,
     error: ApiError | None = None,
 ) -> None:
-    # A cancelled request must still be persisted
-    await asyncio.shield(_record(session, run, status, response=response, error=error))
+    # A cancelled request must still be persisted. The scope shield (unlike
+    # asyncio.shield) survives the repeated cancellation anyio delivers on
+    # client disconnect, so the session isn't closed under the insert.
+    with anyio.CancelScope(shield=True):
+        await _record(session, run, status, response=response, error=error)
 
 
 def _text(content: str | list[ChatCompletionRequestMessageContentPartText]) -> str:
@@ -778,8 +782,9 @@ async def start_stream(
         first = await anext(upstream)
         run.time_to_first_token_ms = run.elapsed_ms()
     except asyncio.CancelledError:
-        if upstream is not None:
-            await upstream.aclose()
+        with anyio.CancelScope(shield=True):
+            if upstream is not None:
+                await upstream.aclose()
         await _record_shielded(
             session, run, ChatCompletionStatus.CANCELLED, response=None
         )

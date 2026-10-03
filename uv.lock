@@ -72,6 +72,7 @@ name = "api"
 version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
+    { name = "anyio" },
     { name = "db" },
     { name = "fastapi" },
     { name = "llm" },
@@ -86,6 +87,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.14.2" },
     { name = "db", editable = "packages/db" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "llm", editable = "packages/llm" },
