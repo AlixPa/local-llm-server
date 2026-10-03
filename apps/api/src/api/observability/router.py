@@ -15,6 +15,7 @@ from sse_starlette import EventSourceResponse, ServerSentEvent
 from api.errors import ApiError
 from api.observability.schemas import (
     RequestEvent,
+    TracedRequestDetail,
     TracedRequestItem,
     TracedRequestList,
 )
@@ -63,6 +64,18 @@ async def list_requests(
         last_id=items[-1].id if items else None,
         has_more=has_more,
     )
+
+
+@router.get("/requests/{request_id}")
+async def get_request(
+    request_id: int, session: Annotated[AsyncSession, Depends(get_session)]
+) -> TracedRequestDetail:
+    found = await repo.get_request_with_steps(session, request_id)
+    if found is None:
+        raise ApiError(
+            404, "invalid_request_error", "not_found", None, f"No such id: {request_id}"
+        )
+    return TracedRequestDetail.from_records(*found)
 
 
 async def _event_stream(shutdown: anyio.Event) -> AsyncGenerator[ServerSentEvent]:

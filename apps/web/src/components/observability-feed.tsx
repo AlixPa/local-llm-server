@@ -18,6 +18,8 @@ type Props = {
   isLoadingMore: boolean;
   onLoadMore: () => void;
   connection: ConnectionState;
+  selectedId: number | null;
+  onSelect: (id: number) => void;
 };
 
 const OUTCOME_VARIANT = {
@@ -41,6 +43,8 @@ export function ObservabilityFeed({
   isLoadingMore,
   onLoadMore,
   connection,
+  selectedId,
+  onSelect,
 }: Props) {
   return (
     <div className="flex flex-col gap-4">
@@ -71,9 +75,19 @@ export function ObservabilityFeed({
             {items.map((item) => (
               <TableRow
                 key={item.id}
+                data-state={item.id === selectedId ? "selected" : undefined}
                 className={item.outcome === "error" ? "bg-destructive/5" : undefined}
               >
-                <TableCell>{new Date(item.started_at_ms).toLocaleString()}</TableCell>
+                <TableCell>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    aria-pressed={item.id === selectedId}
+                    onClick={() => onSelect(item.id)}
+                  >
+                    {new Date(item.started_at_ms).toLocaleString()}
+                  </Button>
+                </TableCell>
                 <TableCell>{item.endpoint}</TableCell>
                 <TableCell>{item.method}</TableCell>
                 <TableCell>{item.summary ?? "—"}</TableCell>

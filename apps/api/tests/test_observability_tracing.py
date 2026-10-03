@@ -337,3 +337,134 @@ async def test_recording_failure_does_not_affect_the_request(
     [(request, steps)] = await read_traces()
     assert request.outcome is TraceOutcome.SUCCESS
     assert steps == []
+
+
+def _kinds(steps: list[WorkflowStep]) -> list[StepKind]:
+    return [step.kind for step in steps]
+
+
+async def test_stream_records_one_assembled_step_not_per_chunk(
+    client: AsyncClient,
+    ollama_mock: OllamaMock,
+    trace_writer: None,
+    read_traces: ReadTraces,
+) -> None:
+    ollama_mock.handler = lambda _: ndjson(stream_lines(["a", "b", "c", "d"]))
+
+    await client.post("/v1/chat/completions", json=STREAM)
+
+    [(_, steps)] = await read_traces()
+    assert _kinds(steps).count(StepKind.RECEIVED_FROM_OLLAMA) == 1
+    assert len(steps) == 4
+
+
+async def test_live_server_in_progress_step_is_observable_mid_stream(
+    live_server: str, ollama_mock: OllamaMock, read_traces: ReadTraces
+) -> None:
+    closed: list[bool] = []
+    ollama_mock.handler = lambda _: Response(
+        200, content=hanging_stream(stream_lines(["Hel"])[:-1], closed)
+    )
+
+    async with httpx.AsyncClient(base_url=live_server) as http:
+        async with http.stream("POST", "/v1/chat/completions", json=STREAM) as resp:
+            # Closing the line iterator would close the connection
+            lines = resp.aiter_lines()
+            while "Hel" not in await anext(lines):
+                pass
+            [(request, steps)] = await read_traces()
+            assert request.outcome is TraceOutcome.IN_PROGRESS
+            assert _kinds(steps) == [
+                StepKind.REQUEST_RECEIVED,
+                StepKind.SENT_TO_OLLAMA,
+                StepKind.RECEIVED_FROM_OLLAMA,
+            ]
+            assert steps[2].status is StepStatus.IN_PROGRESS
+            assert steps[2].content is None
+            assert steps[2].duration_ms is None
+    await _settled(read_traces)
+
+
+@pytest.mark.parametrize(
+    "handler",
+    [
+        lambda _: Response(500, json={"error": "boom"}),
+        lambda _: (_ for _ in ()).throw(httpx.ConnectError("refused")),
+    ],
+    ids=["ollama-error", "unreachable"],
+)
+async def test_ollama_failure_records_failed_step_then_error(
+    client: AsyncClient,
+    ollama_mock: OllamaMock,
+    trace_writer: None,
+    read_traces: ReadTraces,
+    handler: Callable[[Request], Response],
+) -> None:
+    ollama_mock.handler = handler
+
+    response = await client.post("/v1/chat/completions", json=MINIMAL)
+
+    assert response.status_code >= 500
+    [(request, steps)] = await read_traces()
+    assert request.outcome is TraceOutcome.ERROR
+    assert _kinds(steps) == [
+        StepKind.REQUEST_RECEIVED,
+        StepKind.SENT_TO_OLLAMA,
+        StepKind.RECEIVED_FROM_OLLAMA,
+        StepKind.ERROR,
+    ]
+    assert steps[2].status is StepStatus.FAILED
+    assert steps[2].error_message
+    assert (steps[3].source, steps[3].destination) == (
+        Participant.API,
+        Participant.CLIENT,
+    )
+    assert request.error_message == response.json()["error"]["message"]
+
+
+async def test_n_two_records_two_sent_received_pairs_in_order(
+    client: AsyncClient,
+    ollama_mock: OllamaMock,
+    trace_writer: None,
+    read_traces: ReadTraces,
+) -> None:
+    ollama_mock.handler = lambda _: chat_response("Hello")
+
+    await client.post("/v1/chat/completions", json={**MINIMAL, "n": 2})
+
+    [(_, steps)] = await read_traces()
+    assert _kinds(steps) == [
+        StepKind.REQUEST_RECEIVED,
+        StepKind.SENT_TO_OLLAMA,
+        StepKind.RECEIVED_FROM_OLLAMA,
+        StepKind.SENT_TO_OLLAMA,
+        StepKind.RECEIVED_FROM_OLLAMA,
+        StepKind.RESPONSE_RETURNED,
+    ]
+    assert [s.position for s in steps] == list(range(6))
+
+
+async def test_failed_stream_records_error_without_response_returned(
+    client: AsyncClient,
+    ollama_mock: OllamaMock,
+    trace_writer: None,
+    read_traces: ReadTraces,
+) -> None:
+    lines = [*stream_lines(["Hel"])[:-1], {"error": "model crashed"}]
+    ollama_mock.handler = lambda _: ndjson(lines)
+
+    response = await client.post("/v1/chat/completions", json=STREAM)
+
+    assert response.status_code == 200
+    [(request, steps)] = await read_traces()
+    assert request.outcome is TraceOutcome.ERROR
+    assert request.error_message
+    assert "model crashed" in request.error_message
+    assert _kinds(steps) == [
+        StepKind.REQUEST_RECEIVED,
+        StepKind.SENT_TO_OLLAMA,
+        StepKind.RECEIVED_FROM_OLLAMA,
+        StepKind.ERROR,
+    ]
+    assert steps[2].status is StepStatus.FAILED
+    assert steps[2].error_message
