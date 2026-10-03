@@ -30,10 +30,10 @@ description: "Task list for Repository Reset & Foundation Setup"
 
 **Independent Test**: `git ls-files` shows none of the removed paths; quickstart outcome 6.
 
-- [ ] T005 [US1] Delete legacy API feature packages: `apps/api/src/api/batches/`, `chat/`, `completions/`, `config/`, `files/`, `storage/` and `apps/api/log_config.yaml`
-- [ ] T006 [US1] Delete legacy DB code: `packages/db/src/db/models/files.py`, `packages/db/src/db/models/batch_input_file_chunks.py`, all three files in `packages/db/alembic/versions/`, and `packages/db/alembic/README`
-- [ ] T007 [P] [US1] Delete `docker-compose.yaml` and, from disk, the gitignored `config/` and `data/` contents (old pgAdmin servers.json, `batch_input_files/`, `test.jsonl`)
-- [ ] T008 [P] [US1] Reduce `apps/api/README.md` and `packages/db/README.md` to a one-line description each (no feature descriptions)
+- [X] T005 [US1] Delete legacy API feature packages: `apps/api/src/api/batches/`, `chat/`, `completions/`, `config/`, `files/`, `storage/` and `apps/api/log_config.yaml`
+- [X] T006 [US1] Delete legacy DB code: `packages/db/src/db/models/files.py`, `packages/db/src/db/models/batch_input_file_chunks.py`, all three files in `packages/db/alembic/versions/`, and `packages/db/alembic/README`
+- [X] T007 [P] [US1] Delete `docker-compose.yaml` and, from disk, the gitignored `config/` and `data/` contents (old pgAdmin servers.json, `batch_input_files/`, `test.jsonl`)
+- [X] T008 [P] [US1] Reduce `apps/api/README.md` and `packages/db/README.md` to a one-line description each (no feature descriptions)
 
 **Checkpoint**: Repo contains no legacy feature code (it will not run until Phase 3).
 
