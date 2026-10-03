@@ -30,8 +30,8 @@ description: "Task list for Backend Observability Tab"
 
 **Purpose**: Scaffolding that has no behavior of its own
 
-- [ ] T001 [P] Create empty package `apps/api/src/api/observability/__init__.py` (match the style of `apps/api/src/api/analytics/__init__.py`)
-- [ ] T002 [P] Check whether shadcn components needed by the UI (tabs/collapsible/badge/select/switch) already exist in `apps/web/src/components/ui/`; add only missing ones via the shadcn CLI (`pnpm dlx shadcn@latest add <name>` in `apps/web`). Skip if none are needed (YAGNI).
+- [X] T001 [P] Create empty package `apps/api/src/api/observability/__init__.py` (match the style of `apps/api/src/api/analytics/__init__.py`)
+- [X] T002 [P] Check whether shadcn components needed by the UI (tabs/collapsible/badge/select/switch) already exist in `apps/web/src/components/ui/`; add only missing ones via the shadcn CLI (`pnpm dlx shadcn@latest add <name>` in `apps/web`). Skip if none are needed (YAGNI).
 
 ---
 
