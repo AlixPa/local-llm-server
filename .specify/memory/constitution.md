@@ -55,7 +55,10 @@ allowed to starve the interactive, user-facing use case that the server primaril
 ### V. State & Observability via SQLite
 Every inference request and every worker execution MUST be recorded in the SQLite database:
 per-request token usage (prompt/completion/total) attributable to its endpoint, and batch
-job/worker orchestration state (queued, running, completed, failed, retried). Other endpoints
+job/worker orchestration state (queued, running, completed, failed, retried). Recording is from
+an LLM-usage point of view, not a server point of view: a request is recorded once it reaches
+generation logic (including later failures and cancellations), while requests rejected by schema
+validation before that point attempt no inference and need not be recorded. Other endpoints
 (e.g. health checks) record only what their purpose requires. This database is the single
 source of truth for status endpoints and usage accounting — reported status MUST be derived from
 the database, not from in-memory state alone, so it survives process restarts and crashes. Any UI view of
@@ -108,4 +111,4 @@ attention to Principle II (local-only inference) and Principle IV (live-request 
 deviation MUST be called out explicitly and justified in the relevant spec or plan rather than left
 implicit.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
+**Version**: 1.2.1 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
