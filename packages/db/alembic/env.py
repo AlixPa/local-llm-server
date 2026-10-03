@@ -1,9 +1,9 @@
 from logging.config import fileConfig
 
 from alembic import context
-from db.config import POSTGRES_SYNC_URL
+from db.config import get_settings
+from db.engine import get_sync_engine
 from db.models.base import Base
-from sqlalchemy import engine_from_config, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -38,7 +38,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = get_settings().sync_url
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -51,27 +51,8 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
-    configuration = context.config.get_section(context.config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = POSTGRES_SYNC_URL
-
-    connectable = engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            include_schemas=True,
-        )
+    with get_sync_engine().connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

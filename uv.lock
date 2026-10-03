@@ -460,6 +460,8 @@ source = { virtual = "." }
 
 [package.dev-dependencies]
 dev = [
+    { name = "api" },
+    { name = "db" },
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "mypy" },
@@ -476,6 +478,8 @@ dev = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "api", editable = "apps/api" },
+    { name = "db", editable = "packages/db" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "mypy", specifier = ">=2.4.0" },

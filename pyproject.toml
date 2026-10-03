@@ -12,8 +12,14 @@ members = [
     "packages/db",
 ]
 
+[tool.uv.sources]
+api = { workspace = true }
+db = { workspace = true }
+
 [dependency-groups]
 dev = [
+    "api",
+    "db",
     "httpx>=0.28.1",
     "jsonschema>=4.26.0",
     "mypy>=2.4.0",

@@ -1,7 +1,3 @@
-from .batch_input_file_chunks import BatchInputFileChunk
-from .files import File
+from .base import Base
 
-__all__ = [
-    "BatchInputFileChunk",
-    "File",
-]
+__all__ = ["Base"]
