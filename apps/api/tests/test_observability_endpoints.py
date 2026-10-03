@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 from db.engine import get_async_session_factory
-from db.models import Participant, StepKind, StepStatus, TracedRequest
+from db.models import Participant, StepKind, StepStatus, TracedRequest, TraceOutcome
 from db.repositories import tracing as repo
 from httpx import AsyncClient
 from ollama_fakes import OllamaMock, chat_response
@@ -84,6 +84,101 @@ async def test_list_paginates_by_cursor(
 
     assert [item["id"] for item in page["data"] + rest["data"]] == ids[::-1]
     assert rest["has_more"] is False
+
+
+async def _seed_mixed(session: AsyncSession) -> dict[str, int]:
+    specs = [
+        ("a", "/v1/chat/completions", TraceOutcome.SUCCESS),
+        ("b", "/v1/chat/completions", TraceOutcome.ERROR),
+        ("c", "/v1/other", TraceOutcome.ERROR),
+        ("d", "/v1/chat/completions", TraceOutcome.CANCELED),
+    ]
+    ids: dict[str, int] = {}
+    for index, (name, endpoint, outcome) in enumerate(specs):
+        request = await repo.create_request(
+            session,
+            endpoint=endpoint,
+            method="POST",
+            started_at=datetime(2026, 1, 1, 0, 0, index * 10, tzinfo=UTC),
+        )
+        await repo.finish_request(
+            session,
+            request.id,
+            outcome=outcome,
+            duration_ms=1,
+            http_status=200,
+            summary=None,
+            response_id=None,
+            error_message=None,
+        )
+        ids[name] = request.id
+    return ids
+
+
+async def _ids(
+    client: AsyncClient, params: dict[str, int | str | list[str]]
+) -> list[int]:
+    response = await client.get("/v1/observability/requests", params=params)
+    assert response.status_code == 200
+    return [item["id"] for item in response.json()["data"]]
+
+
+async def test_endpoint_filter_is_exact_match(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    ids = await _seed_mixed(session)
+
+    assert await _ids(client, {"endpoint": "/v1/other"}) == [ids["c"]]
+    assert await _ids(client, {"endpoint": "/v1/chat"}) == []
+
+
+async def test_outcome_filter_is_repeatable(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    ids = await _seed_mixed(session)
+
+    assert await _ids(client, {"outcome": "error"}) == [ids["c"], ids["b"]]
+    both = await _ids(client, {"outcome": ["error", "canceled"]})
+    assert both == [ids["d"], ids["c"], ids["b"]]
+
+
+async def test_since_is_inclusive_and_until_is_exclusive(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    ids = await _seed_mixed(session)
+    base = int(datetime(2026, 1, 1, tzinfo=UTC).timestamp())
+
+    # b starts at +10s and c at +20s
+    window = await _ids(client, {"since": base + 10, "until": base + 30})
+    assert window == [ids["c"], ids["b"]]
+    assert await _ids(client, {"until": base + 10}) == [ids["a"]]
+    assert await _ids(client, {"since": base + 31}) == []
+
+
+async def test_filters_combine_with_cursor_pagination(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    ids = await _seed_mixed(session)
+    params: dict[str, int | str] = {"endpoint": "/v1/chat/completions", "limit": 1}
+
+    first = (await client.get("/v1/observability/requests", params=params)).json()
+    second = (
+        await client.get(
+            "/v1/observability/requests",
+            params={**params, "after": first["last_id"]},
+        )
+    ).json()
+    third = (
+        await client.get(
+            "/v1/observability/requests",
+            params={**params, "after": second["last_id"]},
+        )
+    ).json()
+
+    assert [first["data"][0]["id"], second["data"][0]["id"]] == [ids["d"], ids["b"]]
+    assert first["has_more"] is True
+    assert [item["id"] for item in third["data"]] == [ids["a"]]
+    assert third["has_more"] is False
 
 
 async def test_limit_bounds_are_rejected(client: AsyncClient) -> None:

@@ -159,3 +159,23 @@ test("an in-progress step fills in after the next refetch", async () => {
     "completed",
   );
 });
+
+test("an open detail keeps refreshing while the list is paused", async () => {
+  let done = false;
+  serve(() => [
+    step(0, {}),
+    done
+      ? step(1, { ...SENT, duration_ms: 700 })
+      : step(1, { ...SENT, status: "in_progress" }),
+  ]);
+
+  const { user, workflow } = await openDetail();
+  await user.click(screen.getByRole("button", { name: "Pause" }));
+
+  done = true;
+  act(() => {
+    FakeEventSource.instances[0]?.emit("request.updated", '{"id":1}');
+  });
+
+  await within(workflow).findByText("took 700 ms", { exact: false });
+});

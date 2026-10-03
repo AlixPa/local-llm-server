@@ -18,6 +18,7 @@ type Props = {
   isLoadingMore: boolean;
   onLoadMore: () => void;
   connection: ConnectionState;
+  filtersActive: boolean;
   selectedId: number | null;
   onSelect: (id: number) => void;
 };
@@ -43,6 +44,7 @@ export function ObservabilityFeed({
   isLoadingMore,
   onLoadMore,
   connection,
+  filtersActive,
   selectedId,
   onSelect,
 }: Props) {
@@ -51,7 +53,9 @@ export function ObservabilityFeed({
       <p role="status" className="text-muted-foreground text-sm">
         {CONNECTION_LABEL[connection]}
       </p>
-      {items.length === 0 ? (
+      {items.length === 0 && filtersActive ? (
+        <p className="text-muted-foreground">No requests match the current filters.</p>
+      ) : items.length === 0 ? (
         <p className="text-muted-foreground">
           No requests recorded yet. Requests to tracked endpoints, such as chat
           completions, appear here as they happen. Send one from the Playground to get

@@ -24,6 +24,7 @@ export function useTracedRequests(filters: RequestFilters = {}) {
   return useInfiniteQuery({
     queryKey: [...OBSERVABILITY_KEY, "requests", filters],
     initialPageParam: undefined,
+    placeholderData: keepPreviousData,
     queryFn: async ({ pageParam }: { pageParam: Cursor }) => {
       const { data } = await api.GET("/v1/observability/requests", {
         params: { query: { ...filters, after: pageParam } },

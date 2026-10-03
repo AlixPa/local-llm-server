@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { OBSERVABILITY_KEY } from "@/api/observability";
 
 export type ConnectionState =
@@ -20,9 +20,36 @@ function isRequestEventPayload(value: unknown): value is RequestEventPayload {
   );
 }
 
-export function useObservabilityEvents(): { connection: ConnectionState } {
+type ObservabilityEvents = {
+  connection: ConnectionState;
+  paused: boolean;
+  pendingCount: number;
+  pause: () => void;
+  clearPending: () => void;
+  resume: () => void;
+};
+
+export function useObservabilityEvents(): ObservabilityEvents {
   const queryClient = useQueryClient();
   const [connection, setConnection] = useState<ConnectionState>("connecting");
+  const [paused, setPaused] = useState(false);
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<number>>(new Set());
+  // Read by the stream handlers so toggling pause never reconnects the stream
+  const pausedRef = useRef(false);
+
+  const pause = useCallback(() => {
+    pausedRef.current = true;
+    setPaused(true);
+  }, []);
+
+  const clearPending = useCallback(() => setPendingIds(new Set()), []);
+
+  const resume = useCallback(() => {
+    pausedRef.current = false;
+    setPaused(false);
+    setPendingIds(new Set());
+    void queryClient.invalidateQueries({ queryKey: OBSERVABILITY_KEY });
+  }, [queryClient]);
 
   useEffect(() => {
     const refetch = () => {
@@ -30,7 +57,19 @@ export function useObservabilityEvents(): { connection: ConnectionState } {
     };
     const onEvent = (event: MessageEvent<string>) => {
       try {
-        if (isRequestEventPayload(JSON.parse(event.data))) refetch();
+        const payload: unknown = JSON.parse(event.data);
+        if (!isRequestEventPayload(payload)) return;
+        if (pausedRef.current) {
+          if (event.type === "request.created") {
+            setPendingIds((ids) => new Set(ids).add(payload.id));
+          }
+          // An open request's detail keeps refreshing; only the list is held back
+          void queryClient.invalidateQueries({
+            queryKey: [...OBSERVABILITY_KEY, "request"],
+          });
+        } else {
+          refetch();
+        }
       } catch {
         // A malformed notification carries nothing to act on
       }
@@ -41,7 +80,7 @@ export function useObservabilityEvents(): { connection: ConnectionState } {
     source.onopen = () => {
       setConnection("connected");
       // Events are not replayed, so every (re)connect catches up by refetching
-      refetch();
+      if (!pausedRef.current) refetch();
     };
     source.onerror = () =>
       // CLOSED means the browser gave up; otherwise it is retrying
@@ -53,5 +92,12 @@ export function useObservabilityEvents(): { connection: ConnectionState } {
     return () => source.close();
   }, [queryClient]);
 
-  return { connection };
+  return {
+    connection,
+    paused,
+    pendingCount: pendingIds.size,
+    pause,
+    clearPending,
+    resume,
+  };
 }
