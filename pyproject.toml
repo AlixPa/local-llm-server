@@ -10,11 +10,13 @@ dependencies = []
 members = [
     "apps/api",
     "packages/db",
+    "packages/llm",
 ]
 
 [tool.uv.sources]
 api = { workspace = true }
 db = { workspace = true }
+llm = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -22,6 +24,7 @@ dev = [
     "db",
     "httpx>=0.28.1",
     "jsonschema>=4.26.0",
+    "llm",
     "mypy>=2.4.0",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
@@ -47,4 +50,4 @@ exclude = ["packages/db/alembic/"]
 asyncio_mode = "auto"
 markers = ["integration: hits a real local Ollama instance"]
 addopts = "-m 'not integration'"
-testpaths = ["apps/api/tests", "packages/db/tests"]
+testpaths = ["apps/api/tests", "packages/db/tests", "packages/llm/tests"]
