@@ -5,6 +5,14 @@ from .chat_completions import (
     ChatCompletionStatus,
 )
 from .models import Model
+from .tracing import (
+    Participant,
+    StepKind,
+    StepStatus,
+    TracedRequest,
+    TraceOutcome,
+    WorkflowStep,
+)
 
 __all__ = [
     "Base",
@@ -12,4 +20,10 @@ __all__ = [
     "ChatCompletionRecord",
     "ChatCompletionStatus",
     "Model",
+    "Participant",
+    "StepKind",
+    "StepStatus",
+    "TraceOutcome",
+    "TracedRequest",
+    "WorkflowStep",
 ]

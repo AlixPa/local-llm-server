@@ -1,14 +1,21 @@
-from collections.abc import AsyncIterator, Callable, Iterator
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
+import uvicorn
 import yaml
 from api.app import app
 from api.dependencies import get_ollama_client, get_session
-from db.engine import clear_caches
-from db.models import Base, Model
+from api.observability.tracing import writer
+from db.engine import (
+    clear_caches,
+    get_async_engine,
+    get_async_session_factory,
+)
+from db.models import Base, Model, TracedRequest, WorkflowStep
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, MockTransport, Request, Response
 from jsonschema import validate
@@ -17,6 +24,7 @@ from llm.config import OllamaSettings
 from ollama_fakes import OllamaMock
 from openapi_core import Config, OpenAPI
 from openapi_core.testing import MockRequest, MockResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -95,6 +103,67 @@ async def client(test_app: FastAPI) -> AsyncIterator[AsyncClient]:
         base_url="http://test",
     ) as client:
         yield client
+
+
+@pytest.fixture
+async def trace_db() -> AsyncIterator[None]:
+    engine = get_async_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    await writer.stop()
+    await engine.dispose()
+
+
+@pytest.fixture
+async def trace_writer(trace_db: None) -> AsyncIterator[None]:
+    writer.start()
+    yield
+
+
+@pytest.fixture
+def read_traces() -> Callable[
+    [], Awaitable[list[tuple[TracedRequest, list[WorkflowStep]]]]
+]:
+    async def read() -> list[tuple[TracedRequest, list[WorkflowStep]]]:
+        await writer.drain()
+        async with get_async_session_factory()() as session:
+            requests = (
+                await session.execute(select(TracedRequest).order_by(TracedRequest.id))
+            ).scalars()
+            return [
+                (
+                    request,
+                    list(
+                        (
+                            await session.execute(
+                                select(WorkflowStep)
+                                .where(WorkflowStep.request_id == request.id)
+                                .order_by(WorkflowStep.position)
+                            )
+                        ).scalars()
+                    ),
+                )
+                for request in list(requests)
+            ]
+
+    return read
+
+
+@pytest.fixture
+async def live_server(test_app: FastAPI, trace_db: None) -> AsyncIterator[str]:
+    server = uvicorn.Server(
+        uvicorn.Config(test_app, port=0, log_level="warning", lifespan="on")
+    )
+    task = asyncio.create_task(server.serve())
+    while not server.started:
+        if task.done():
+            task.result()
+        await asyncio.sleep(0.01)
+    port = server.servers[0].sockets[0].getsockname()[1]
+    yield f"http://127.0.0.1:{port}"
+    server.should_exit = True
+    await task
 
 
 def _normalize_spec(node: Any) -> Any:

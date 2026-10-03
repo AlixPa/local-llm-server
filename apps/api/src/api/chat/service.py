@@ -11,7 +11,7 @@ from enum import StrEnum
 from typing import Any
 
 import anyio
-from db.models import ChatCompletionStatus
+from db.models import ChatCompletionStatus, StepStatus, TraceOutcome
 from db.repositories import chat_completions as chat_completions_repo
 from db.repositories import models as models_repo
 from llm.client import (
@@ -73,6 +73,7 @@ from api.chat.schemas import (
     ToolChoiceMode,
 )
 from api.errors import ApiError, Error
+from api.observability.tracing import Trace, get_trace
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +316,24 @@ async def _record_shielded(
     # client disconnect, so the session isn't closed under the insert.
     with anyio.CancelScope(shield=True):
         await _record(session, run, status, response=response, error=error)
+
+
+def _begin_trace(trace: Trace, run: _Run) -> None:
+    mode = "stream" if run.stream else "non-stream"
+    trace.set_summary(f"{run.request.model} · {mode}")
+    trace.set_response_id(run.external_id)
+
+
+def _close_open_steps(
+    trace: Trace,
+    status: StepStatus,
+    message: str | None = None,
+    content: Any = None,
+) -> None:
+    while trace.has_open_step:
+        trace.step_received(content, status, message)
+    if status is StepStatus.CANCELED:
+        trace.set_outcome(TraceOutcome.CANCELED)
 
 
 def _text(content: str | list[ChatCompletionRequestMessageContentPartText]) -> str:
@@ -721,33 +740,43 @@ async def create_chat_completion(
     is_disconnected: Callable[[], Awaitable[bool]],
 ) -> CreateChatCompletionResponse:
     run = _Run(request, stream=False)
+    trace = get_trace()
+    _begin_trace(trace, run)
     failed = ChatCompletionStatus.FAILED
     try:
         prepared = await _prepare(request, session, ollama.num_ctx)
+        for _ in range(prepared.n):
+            trace.step_sent(prepared.ollama)
         responses = await _race(_generate_all(ollama, prepared), is_disconnected)
         for response in responses:
+            trace.step_received(response)
             run.totals.add(response)
         if any(_overflowed(response, prepared.num_ctx) for response in responses):
             raise _context_exceeded(prepared.num_ctx)
         body = _build_response(run, responses)
     except _ClientDisconnectedError:
+        _close_open_steps(trace, StepStatus.CANCELED)
         await _record(session, run, ChatCompletionStatus.CANCELLED, response=None)
         raise ApiError(
             499, "invalid_request_error", None, None, "Client closed the request."
         ) from None
     except asyncio.CancelledError:
+        _close_open_steps(trace, StepStatus.CANCELED)
         await _record_shielded(
             session, run, ChatCompletionStatus.CANCELLED, response=None
         )
         raise
     except ApiError as exc:
+        _close_open_steps(trace, StepStatus.FAILED, exc.message)
         await _record(session, run, failed, response=None, error=exc)
         raise
     except _OLLAMA_ERRORS as exc:
         error = _to_api_error(exc, request.model)
+        _close_open_steps(trace, StepStatus.FAILED, error.message)
         await _record(session, run, failed, response=None, error=error)
         raise error from exc
     except Exception:
+        _close_open_steps(trace, StepStatus.FAILED, "Internal server error")
         await _record(session, run, failed, response=None, error=_internal_error())
         raise
     await _record(
@@ -774,14 +803,18 @@ async def start_stream(
     ollama: OllamaClient,
 ) -> AsyncGenerator[StreamEvent]:
     run = _Run(request, stream=True)
+    trace = get_trace()
+    _begin_trace(trace, run)
     failed = ChatCompletionStatus.FAILED
     upstream: AsyncGenerator[OllamaChatChunk] | None = None
     try:
         prepared = await _prepare(request, session, ollama.num_ctx)
+        trace.step_sent(prepared.ollama)
         upstream = ollama.chat_stream(prepared.ollama)
         first = await anext(upstream)
         run.time_to_first_token_ms = run.elapsed_ms()
     except asyncio.CancelledError:
+        _close_open_steps(trace, StepStatus.CANCELED)
         with anyio.CancelScope(shield=True):
             if upstream is not None:
                 await upstream.aclose()
@@ -791,19 +824,25 @@ async def start_stream(
         raise
     except StopAsyncIteration:
         error = ApiError(500, "server_error", None, None, "Ollama returned no data.")
+        _close_open_steps(trace, StepStatus.FAILED, error.message)
         await _record(session, run, failed, response=None, error=error)
         raise error from None
     except ApiError as exc:
+        _close_open_steps(trace, StepStatus.FAILED, exc.message)
         await _record(session, run, failed, response=None, error=exc)
         raise
     except _OLLAMA_ERRORS as exc:
         error = _to_api_error(exc, request.model)
+        _close_open_steps(trace, StepStatus.FAILED, error.message)
         await _record(session, run, failed, response=None, error=error)
         raise error from exc
     except Exception:
+        _close_open_steps(trace, StepStatus.FAILED, "Internal server error")
         await _record(session, run, failed, response=None, error=_internal_error())
         raise
-    return _stream_body(run, prepared, ollama, session, _chain(first, upstream))
+    body = _stream_body(run, prepared, ollama, session, _chain(first, upstream))
+    trace.add_closer(body.aclose)
+    return body
 
 
 def _chunk(
@@ -840,8 +879,11 @@ async def _stream_body(
     status = ChatCompletionStatus.CANCELLED
     error: ApiError | None = None
     wants_logprobs = bool(run.request.logprobs)
+    trace = get_trace()
     try:
         for index in range(prepared.n):
+            if index > 0:
+                trace.step_sent(prepared.ollama)
             chunks = first_choice if index == 0 else ollama.chat_stream(prepared.ollama)
             run.contents[index] = ""
             run.tool_calls[index] = []
@@ -900,6 +942,7 @@ async def _stream_body(
                         )
             if not finished:
                 raise OllamaServerError("Ollama stream ended before completion")
+            trace.step_received(run.streamed_response())
         if prepared.include_usage:
             yield CreateChatCompletionStreamResponse(
                 id=run.external_id,
@@ -924,11 +967,23 @@ async def _stream_body(
         status, error = ChatCompletionStatus.FAILED, _internal_error()
         yield _error_event(error)
     finally:
+        partial = run.streamed_response() if run.contents else None
+        match status:
+            case ChatCompletionStatus.SUCCEEDED:
+                trace.set_response(run.streamed_response())
+            case ChatCompletionStatus.FAILED:
+                failure = error.message if error else "Internal server error"
+                _close_open_steps(trace, StepStatus.FAILED, failure, partial)
+                trace.add_error(failure)
+                trace.set_outcome(TraceOutcome.ERROR)
+            case ChatCompletionStatus.CANCELLED:
+                _close_open_steps(trace, StepStatus.CANCELED, None, partial)
+                trace.set_outcome(TraceOutcome.CANCELED)
         await _record_shielded(
             session,
             run,
             status,
-            response=run.streamed_response() if run.contents else None,
+            response=partial,
             error=error,
         )
 
