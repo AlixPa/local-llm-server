@@ -9,7 +9,7 @@ from db.engine import clear_caches
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 
 
-def test_upgrade_head_creates_empty_database(
+def test_upgrade_head_creates_tables(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     db_path = tmp_path / "data" / "migrated.db"
@@ -24,5 +24,10 @@ def test_upgrade_head_creates_empty_database(
             row[0]
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
-    assert tables == {"alembic_version"}
+    assert tables == {
+        "alembic_version",
+        "chat_completion_records",
+        "chat_completion_contents",
+        "models",
+    }
     clear_caches()

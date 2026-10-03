@@ -12,7 +12,7 @@ This is the number one rule of this repo. Do not build structure, abstractions, 
 of an actual, present need:
 
 - No service layer until a router actually accumulates business logic. A router that just
-  validates input, calls the DB, and returns a response does not get a `service.py`.
+  validates input, calls the `db` package, and returns a response does not get a `service.py`.
 - No worker package/process until the batch feature is actually being built — its location and
   shape are decided then (see "Deliberately left open" below), not pre-scaffolded now.
 - No frontend state store, E2E suite, i18n, shared-component extraction, or production static
@@ -69,6 +69,14 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   settings, the async engine/session factory/`get_session` (API), the sync engine/session
   factory (Alembic, future workers), and the declarative `Base`. Models and repositories are
   what start empty and arrive with the first feature that needs them.
+- **All database operations live in `packages/db`; the API layer (and any future worker) contains
+  none.** No SQLAlchemy statements (`select`, `insert`, `update`, `delete`), no `session.execute`/
+  `add`/`commit`, no ORM-model manipulation outside `packages/db`. Each operation is a function in
+  the db package (e.g. `db/repositories/batches.py`) that takes the session and typed arguments and
+  returns results; callers only call those functions. The API may obtain a session via the db
+  package's `get_session` dependency and pass it through, nothing more. Per YAGNI, add a query
+  function only when a feature actually needs it — no speculative CRUD sets or generic repository
+  base classes.
 - **Deliberately left open / decided later, per YAGNI:**
   - Where batch worker code lives (`apps/worker` vs `packages/worker` vs inside `apps/api`) —
     decide this when the batch-processing feature is actually planned (`/speckit-plan`).
@@ -247,9 +255,12 @@ two toolchains do not mix.
 
 ## Runtime / infra
 
-- **Ollama access** will live in a future `llm` workspace package, not in `apps/api`; its shape
-  (including the shared `httpx.AsyncClient` — one client reused for every request, closed on
-  shutdown, never one per call) is decided when that package is planned.
+- **Target platform**: macOS on Apple silicon, single machine. No Linux/Windows support is
+  required; performance targets (e.g. time to first token) are judged on such a machine.
+
+- **Ollama access** lives in the `llm` workspace package (`packages/llm`), not in `apps/api`. It
+  uses one shared `httpx.AsyncClient`, reused for every request and closed on shutdown, never
+  one per call.
 
 ## Frontend
 

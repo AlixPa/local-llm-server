@@ -21,10 +21,627 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/chat/completions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Chat Completion */
+        post: operations["create_chat_completion_v1_chat_completions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Models */
+        get: operations["list_models_v1_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/chat-completions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Chat Completions */
+        get: operations["list_chat_completions_v1_analytics_chat_completions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/chat-completions/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Chat Completions Summary */
+        get: operations["get_chat_completions_summary_v1_analytics_chat_completions_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AssistantAudioReference */
+        AssistantAudioReference: {
+            /** Id */
+            id: string;
+        };
+        /** AudioOutputParameters */
+        AudioOutputParameters: {
+            /** Voice */
+            voice: string | {
+                [key: string]: unknown;
+            };
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "wav" | "aac" | "mp3" | "flac" | "opus" | "pcm16";
+        };
+        /** ChatCompletionAllowedTools */
+        ChatCompletionAllowedTools: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto" | "required";
+            /** Tools */
+            tools: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** ChatCompletionAllowedToolsChoice */
+        ChatCompletionAllowedToolsChoice: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "allowed_tools";
+            allowed_tools: components["schemas"]["ChatCompletionAllowedTools"];
+        };
+        /** ChatCompletionAnalyticsItem */
+        ChatCompletionAnalyticsItem: {
+            /** Id */
+            id: string;
+            /** Created */
+            created: number;
+            /** Model */
+            model: string;
+            status: components["schemas"]["ChatCompletionStatus"];
+            /** Stream */
+            stream: boolean;
+            /** N */
+            n: number;
+            /** Prompt Tokens */
+            prompt_tokens: number | null;
+            /** Completion Tokens */
+            completion_tokens: number | null;
+            /** Total Tokens */
+            total_tokens: number | null;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Time To First Token Ms */
+            time_to_first_token_ms: number | null;
+            /** Generation Duration Ms */
+            generation_duration_ms: number | null;
+            /** Load Duration Ms */
+            load_duration_ms: number | null;
+            /** Finish Reason */
+            finish_reason: string | null;
+            /** Error Type */
+            error_type: string | null;
+            /** Error Code */
+            error_code: string | null;
+        };
+        /** ChatCompletionAnalyticsList */
+        ChatCompletionAnalyticsList: {
+            /**
+             * Object
+             * @constant
+             */
+            object: "list";
+            /** Data */
+            data: components["schemas"]["ChatCompletionAnalyticsItem"][];
+            /** First Id */
+            first_id: string | null;
+            /** Last Id */
+            last_id: string | null;
+            /** Has More */
+            has_more: boolean;
+        };
+        /** ChatCompletionAnalyticsSummary */
+        ChatCompletionAnalyticsSummary: {
+            /** Request Count */
+            request_count: number;
+            /** Error Count */
+            error_count: number;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Avg Duration Ms */
+            avg_duration_ms: number | null;
+            /** Avg Time To First Token Ms */
+            avg_time_to_first_token_ms: number | null;
+            /** Avg Generation Duration Ms */
+            avg_generation_duration_ms: number | null;
+        };
+        /** ChatCompletionFunctionCallOption */
+        ChatCompletionFunctionCallOption: {
+            /** Name */
+            name: string;
+        };
+        /** ChatCompletionFunctions */
+        ChatCompletionFunctions: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Parameters */
+            parameters?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ChatCompletionMessageCustomToolCall */
+        ChatCompletionMessageCustomToolCall: {
+            /** Id */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "custom";
+            custom: components["schemas"]["ChatCompletionMessageCustomToolCallBody"];
+        };
+        /** ChatCompletionMessageCustomToolCallBody */
+        ChatCompletionMessageCustomToolCallBody: {
+            /** Name */
+            name: string;
+            /** Input */
+            input: string;
+        };
+        /** ChatCompletionMessageToolCall */
+        ChatCompletionMessageToolCall: {
+            /** Id */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "function";
+            function: components["schemas"]["ChatCompletionMessageToolCallFunction"];
+        };
+        /** ChatCompletionMessageToolCallFunction */
+        ChatCompletionMessageToolCallFunction: {
+            /** Name */
+            name: string;
+            /** Arguments */
+            arguments: string;
+        };
+        ChatCompletionMessageToolCalls: (components["schemas"]["ChatCompletionMessageToolCall"] | components["schemas"]["ChatCompletionMessageCustomToolCall"])[];
+        /** ChatCompletionNamedToolChoice */
+        ChatCompletionNamedToolChoice: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "function";
+            function: components["schemas"]["ChatCompletionNamedToolChoiceFunction"];
+        };
+        /** ChatCompletionNamedToolChoiceCustom */
+        ChatCompletionNamedToolChoiceCustom: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "custom";
+            custom: components["schemas"]["ChatCompletionNamedToolChoiceCustomBody"];
+        };
+        /** ChatCompletionNamedToolChoiceCustomBody */
+        ChatCompletionNamedToolChoiceCustomBody: {
+            /** Name */
+            name: string;
+        };
+        /** ChatCompletionNamedToolChoiceFunction */
+        ChatCompletionNamedToolChoiceFunction: {
+            /** Name */
+            name: string;
+        };
+        /** ChatCompletionRequestAssistantMessage */
+        ChatCompletionRequestAssistantMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            role: "assistant";
+            /** Content */
+            content?: string | components["schemas"]["ChatCompletionRequestAssistantMessageContentPart"][] | null;
+            /** Refusal */
+            refusal?: string | null;
+            /** Name */
+            name?: string | null;
+            audio?: components["schemas"]["AssistantAudioReference"] | null;
+            tool_calls?: components["schemas"]["ChatCompletionMessageToolCalls"] | null;
+            function_call?: components["schemas"]["FunctionCall"] | null;
+        };
+        ChatCompletionRequestAssistantMessageContentPart: components["schemas"]["ChatCompletionRequestMessageContentPartText"] | components["schemas"]["ChatCompletionRequestMessageContentPartRefusal"];
+        /** ChatCompletionRequestDeveloperMessage */
+        ChatCompletionRequestDeveloperMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            role: "developer";
+            /** Content */
+            content: string | components["schemas"]["TextParts"];
+            /** Name */
+            name?: string | null;
+        };
+        /** ChatCompletionRequestFunctionMessage */
+        ChatCompletionRequestFunctionMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            role: "function";
+            /** Content */
+            content: string | null;
+            /** Name */
+            name: string;
+        };
+        ChatCompletionRequestMessage: components["schemas"]["ChatCompletionRequestDeveloperMessage"] | components["schemas"]["ChatCompletionRequestSystemMessage"] | components["schemas"]["ChatCompletionRequestUserMessage"] | components["schemas"]["ChatCompletionRequestAssistantMessage"] | components["schemas"]["ChatCompletionRequestToolMessage"] | components["schemas"]["ChatCompletionRequestFunctionMessage"];
+        /** ChatCompletionRequestMessageContentPartAudio */
+        ChatCompletionRequestMessageContentPartAudio: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "input_audio";
+            input_audio: components["schemas"]["InputAudio"];
+            prompt_cache_breakpoint?: components["schemas"]["PromptCacheBreakpointParam"] | null;
+        };
+        /** ChatCompletionRequestMessageContentPartFile */
+        ChatCompletionRequestMessageContentPartFile: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "file";
+            file: components["schemas"]["FileContent"];
+            prompt_cache_breakpoint?: components["schemas"]["PromptCacheBreakpointParam"] | null;
+        };
+        /** ChatCompletionRequestMessageContentPartImage */
+        ChatCompletionRequestMessageContentPartImage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "image_url";
+            image_url: components["schemas"]["ImageUrl"];
+            prompt_cache_breakpoint?: components["schemas"]["PromptCacheBreakpointParam"] | null;
+        };
+        /** ChatCompletionRequestMessageContentPartRefusal */
+        ChatCompletionRequestMessageContentPartRefusal: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "refusal";
+            /** Refusal */
+            refusal: string;
+        };
+        /** ChatCompletionRequestMessageContentPartText */
+        ChatCompletionRequestMessageContentPartText: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "text";
+            /** Text */
+            text: string;
+            prompt_cache_breakpoint?: components["schemas"]["PromptCacheBreakpointParam"] | null;
+        };
+        /** ChatCompletionRequestSystemMessage */
+        ChatCompletionRequestSystemMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            role: "system";
+            /** Content */
+            content: string | components["schemas"]["TextParts"];
+            /** Name */
+            name?: string | null;
+        };
+        /** ChatCompletionRequestToolMessage */
+        ChatCompletionRequestToolMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            role: "tool";
+            /** Content */
+            content: string | components["schemas"]["TextParts"];
+            /** Tool Call Id */
+            tool_call_id: string;
+        };
+        /** ChatCompletionRequestUserMessage */
+        ChatCompletionRequestUserMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            role: "user";
+            /** Content */
+            content: string | components["schemas"]["ChatCompletionRequestUserMessageContentPart"][];
+            /** Name */
+            name?: string | null;
+        };
+        ChatCompletionRequestUserMessageContentPart: components["schemas"]["ChatCompletionRequestMessageContentPartText"] | components["schemas"]["ChatCompletionRequestMessageContentPartImage"] | components["schemas"]["ChatCompletionRequestMessageContentPartAudio"] | components["schemas"]["ChatCompletionRequestMessageContentPartFile"];
+        /** ChatCompletionResponseMessage */
+        ChatCompletionResponseMessage: {
+            /**
+             * Role
+             * @constant
+             */
+            role: "assistant";
+            /** Content */
+            content: string | null;
+            /** Refusal */
+            refusal?: string | null;
+            tool_calls?: components["schemas"]["ChatCompletionMessageToolCalls"] | null;
+            function_call?: components["schemas"]["FunctionCall"] | null;
+        };
+        /**
+         * ChatCompletionStatus
+         * @enum {string}
+         */
+        ChatCompletionStatus: "succeeded" | "failed" | "cancelled";
+        /** ChatCompletionStreamOptions */
+        ChatCompletionStreamOptions: {
+            /** Include Usage */
+            include_usage?: boolean | null;
+            /** Include Obfuscation */
+            include_obfuscation?: boolean | null;
+        };
+        /** ChatCompletionTokenLogprob */
+        ChatCompletionTokenLogprob: {
+            /** Token */
+            token: string;
+            /** Logprob */
+            logprob: number;
+            /** Bytes */
+            bytes: number[] | null;
+            /** Top Logprobs */
+            top_logprobs: components["schemas"]["ChatCompletionTokenTopLogprob"][];
+        };
+        /** ChatCompletionTokenTopLogprob */
+        ChatCompletionTokenTopLogprob: {
+            /** Token */
+            token: string;
+            /** Logprob */
+            logprob: number;
+            /** Bytes */
+            bytes: number[] | null;
+        };
+        /** ChatCompletionTool */
+        ChatCompletionTool: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "function";
+            function: components["schemas"]["FunctionObject"];
+        };
+        /** ChoiceLogprobs */
+        ChoiceLogprobs: {
+            /** Content */
+            content: components["schemas"]["ChatCompletionTokenLogprob"][] | null;
+            /** Refusal */
+            refusal: components["schemas"]["ChatCompletionTokenLogprob"][] | null;
+        };
+        /** CompletionUsage */
+        CompletionUsage: {
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
+        };
+        /** CreateChatCompletionRequest */
+        CreateChatCompletionRequest: {
+            /** Messages */
+            messages: components["schemas"]["ChatCompletionRequestMessage"][];
+            /** Model */
+            model: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: string;
+            } | null;
+            /** Top Logprobs */
+            top_logprobs?: number | null;
+            /** Temperature */
+            temperature?: number | null;
+            /** Top P */
+            top_p?: number | null;
+            /** User */
+            user?: string | null;
+            /** Safety Identifier */
+            safety_identifier?: string | null;
+            /** Prompt Cache Key */
+            prompt_cache_key?: string | null;
+            /** Prompt Cache Retention */
+            prompt_cache_retention?: ("in_memory" | "24h") | null;
+            prompt_cache_options?: components["schemas"]["PromptCacheOptionsParam"] | null;
+            service_tier?: components["schemas"]["ServiceTier"] | null;
+            /** Modalities */
+            modalities?: components["schemas"]["ResponseModality"][] | null;
+            verbosity?: components["schemas"]["Verbosity"] | null;
+            reasoning_effort?: components["schemas"]["ReasoningEffort"] | null;
+            /** Max Completion Tokens */
+            max_completion_tokens?: number | null;
+            /** Frequency Penalty */
+            frequency_penalty?: number | null;
+            /** Presence Penalty */
+            presence_penalty?: number | null;
+            web_search_options?: components["schemas"]["WebSearchOptions"] | null;
+            /** Response Format */
+            response_format?: (components["schemas"]["ResponseFormatText"] | components["schemas"]["ResponseFormatJsonSchema"] | components["schemas"]["ResponseFormatJsonObject"]) | null;
+            audio?: components["schemas"]["AudioOutputParameters"] | null;
+            /** Store */
+            store?: boolean | null;
+            moderation?: components["schemas"]["ModerationParam"] | null;
+            /** Stream */
+            stream?: boolean | null;
+            /** Stop */
+            stop?: string | string[] | null;
+            /** Logit Bias */
+            logit_bias?: {
+                [key: string]: number;
+            } | null;
+            /** Logprobs */
+            logprobs?: boolean | null;
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** N */
+            n?: number | null;
+            prediction?: components["schemas"]["PredictionContent"] | null;
+            /** Seed */
+            seed?: number | null;
+            stream_options?: components["schemas"]["ChatCompletionStreamOptions"] | null;
+            /** Tools */
+            tools?: (components["schemas"]["ChatCompletionTool"] | components["schemas"]["CustomToolChatCompletions"])[] | null;
+            /** Tool Choice */
+            tool_choice?: components["schemas"]["ToolChoiceMode"] | components["schemas"]["ChatCompletionAllowedToolsChoice"] | components["schemas"]["ChatCompletionNamedToolChoice"] | components["schemas"]["ChatCompletionNamedToolChoiceCustom"] | null;
+            /** Parallel Tool Calls */
+            parallel_tool_calls?: boolean | null;
+            /** Function Call */
+            function_call?: components["schemas"]["FunctionCallMode"] | components["schemas"]["ChatCompletionFunctionCallOption"] | null;
+            /** Functions */
+            functions?: components["schemas"]["ChatCompletionFunctions"][] | null;
+        };
+        /** CreateChatCompletionResponse */
+        CreateChatCompletionResponse: {
+            /** Id */
+            id: string;
+            /**
+             * Object
+             * @constant
+             */
+            object: "chat.completion";
+            /** Created */
+            created: number;
+            /** Model */
+            model: string;
+            /** Choices */
+            choices: components["schemas"]["CreateChatCompletionResponseChoice"][];
+            usage?: components["schemas"]["CompletionUsage"] | null;
+        };
+        /** CreateChatCompletionResponseChoice */
+        CreateChatCompletionResponseChoice: {
+            /** Index */
+            index: number;
+            message: components["schemas"]["ChatCompletionResponseMessage"];
+            logprobs: components["schemas"]["ChoiceLogprobs"] | null;
+            finish_reason: components["schemas"]["FinishReason"];
+        };
+        /** CustomToolChatCompletions */
+        CustomToolChatCompletions: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "custom";
+            custom: components["schemas"]["CustomToolChatCompletionsBody"];
+        };
+        /** CustomToolChatCompletionsBody */
+        CustomToolChatCompletionsBody: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Format */
+            format?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** FileContent */
+        FileContent: {
+            /** Filename */
+            filename?: string | null;
+            /** File Data */
+            file_data?: string | null;
+            /** File Id */
+            file_id?: string | null;
+        };
+        /**
+         * FinishReason
+         * @enum {string}
+         */
+        FinishReason: "stop" | "length" | "tool_calls" | "content_filter" | "function_call";
+        /** FunctionCall */
+        FunctionCall: {
+            /** Name */
+            name: string;
+            /** Arguments */
+            arguments: string;
+        };
+        /**
+         * FunctionCallMode
+         * @enum {string}
+         */
+        FunctionCallMode: "none" | "auto";
+        /** FunctionObject */
+        FunctionObject: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Parameters */
+            parameters?: {
+                [key: string]: unknown;
+            } | null;
+            /** Strict */
+            strict?: boolean | null;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
         /** HealthResponse */
         HealthResponse: {
             /**
@@ -32,6 +649,188 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /**
+         * ImageDetail
+         * @enum {string}
+         */
+        ImageDetail: "auto" | "low" | "high" | "original";
+        /** ImageUrl */
+        ImageUrl: {
+            /** Url */
+            url: string;
+            detail?: components["schemas"]["ImageDetail"] | null;
+        };
+        /** InputAudio */
+        InputAudio: {
+            /** Data */
+            data: string;
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "wav" | "mp3";
+        };
+        /** JsonSchemaFormat */
+        JsonSchemaFormat: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Schema */
+            schema?: {
+                [key: string]: unknown;
+            } | null;
+            /** Strict */
+            strict?: boolean | null;
+        };
+        /** ListModelsResponse */
+        ListModelsResponse: {
+            /**
+             * Object
+             * @constant
+             */
+            object: "list";
+            /** Data */
+            data: components["schemas"]["Model"][];
+        };
+        /** Model */
+        Model: {
+            /** Id */
+            id: string;
+            /** Created */
+            created: number;
+            /**
+             * Object
+             * @constant
+             */
+            object: "model";
+            /** Owned By */
+            owned_by: string;
+        };
+        /** ModerationParam */
+        ModerationParam: {
+            /** Model */
+            model: string;
+            /** Policy */
+            policy?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** PredictionContent */
+        PredictionContent: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "content";
+            /** Content */
+            content: string | components["schemas"]["TextParts"];
+        };
+        /** PromptCacheBreakpointParam */
+        PromptCacheBreakpointParam: {
+            /**
+             * Mode
+             * @constant
+             */
+            mode: "explicit";
+        };
+        /** PromptCacheOptionsParam */
+        PromptCacheOptionsParam: {
+            /** Ttl */
+            ttl?: "30m" | null;
+            /** Mode */
+            mode?: ("implicit" | "explicit") | null;
+        };
+        /**
+         * ReasoningEffort
+         * @enum {string}
+         */
+        ReasoningEffort: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+        /** ResponseFormatJsonObject */
+        ResponseFormatJsonObject: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "json_object";
+        };
+        /** ResponseFormatJsonSchema */
+        ResponseFormatJsonSchema: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "json_schema";
+            json_schema: components["schemas"]["JsonSchemaFormat"];
+        };
+        /** ResponseFormatText */
+        ResponseFormatText: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "text";
+        };
+        /**
+         * ResponseModality
+         * @enum {string}
+         */
+        ResponseModality: "text" | "audio";
+        /**
+         * ServiceTier
+         * @enum {string}
+         */
+        ServiceTier: "auto" | "default" | "flex" | "scale" | "priority" | "fast";
+        TextParts: components["schemas"]["ChatCompletionRequestMessageContentPartText"][];
+        /**
+         * ToolChoiceMode
+         * @enum {string}
+         */
+        ToolChoiceMode: "none" | "auto" | "required";
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
+        };
+        /**
+         * Verbosity
+         * @enum {string}
+         */
+        Verbosity: "low" | "medium" | "high";
+        /** WebSearchLocation */
+        WebSearchLocation: {
+            /** Country */
+            country?: string | null;
+            /** Region */
+            region?: string | null;
+            /** City */
+            city?: string | null;
+            /** Timezone */
+            timezone?: string | null;
+        };
+        /** WebSearchOptions */
+        WebSearchOptions: {
+            user_location?: components["schemas"]["WebSearchUserLocation"] | null;
+            /** Search Context Size */
+            search_context_size?: ("low" | "medium" | "high") | null;
+        };
+        /** WebSearchUserLocation */
+        WebSearchUserLocation: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "approximate";
+            approximate: components["schemas"]["WebSearchLocation"];
         };
     };
     responses: never;
@@ -58,6 +857,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    create_chat_completion_v1_chat_completions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChatCompletionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateChatCompletionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_models_v1_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListModelsResponse"];
+                };
+            };
+        };
+    };
+    list_chat_completions_v1_analytics_chat_completions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                after?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCompletionAnalyticsList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_chat_completions_summary_v1_analytics_chat_completions_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCompletionAnalyticsSummary"];
                 };
             };
         };

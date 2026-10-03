@@ -10,6 +10,25 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
 
+OPENAI_PATHS = frozenset({"/v1/chat/completions"})
+
+
+class ApiError(Exception):
+    def __init__(
+        self,
+        status: int,
+        type: str,
+        code: str | None,
+        param: str | None,
+        message: str,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.type = type
+        self.code = code
+        self.param = param
+        self.message = message
+
 
 class Error(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -44,16 +63,26 @@ def _response(
     *,
     param: str | None = None,
     code: str | None = None,
+    type: str | None = None,
 ) -> JSONResponse:
     body = ErrorResponse(
         error=Error(
-            message=message, type=_type_for(status_code), param=param, code=code
+            message=message,
+            type=type or _type_for(status_code),
+            param=param,
+            code=code,
         )
     )
     return JSONResponse(status_code=status_code, content=body.model_dump())
 
 
 def register_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(ApiError)
+    async def handle_api_error(request: Request, exc: ApiError) -> JSONResponse:
+        return _response(
+            exc.status, exc.message, param=exc.param, code=exc.code, type=exc.type
+        )
+
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_exception(
         request: Request, exc: StarletteHTTPException
@@ -68,6 +97,8 @@ def register_error_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         first = exc.errors()[0]
         param = str(first["loc"][-1]) if first["loc"] else None
+        if request.url.path in OPENAI_PATHS:
+            return _response(400, first["msg"], param=param)
         return _response(422, first["msg"], param=param, code=_code_for(422))
 
     @app.exception_handler(Exception)
