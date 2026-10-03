@@ -1,0 +1,250 @@
+# CLAUDE.md
+
+Project-specific conventions for working in `local-llm-server`. These are binding defaults —
+follow them without re-deriving a preference each time. The project constitution
+(`.specify/memory/constitution.md`) governs *what* the system must be (API compatibility,
+local-only inference, live-request priority, etc.); this file governs *how* day-to-day
+development is done.
+
+## Guiding principle: YAGNI (overrides everything else below)
+
+This is the number one rule of this repo. Do not build structure, abstractions, or layers ahead
+of an actual, present need:
+
+- No service layer until a router actually accumulates business logic. A router that just
+  validates input, calls the DB, and returns a response does not get a `service.py`.
+- No worker package/process until the batch feature is actually being built — its location and
+  shape are decided then (see "Deliberately left open" below), not pre-scaffolded now.
+- No speculative fields, config options, abstraction layers, or "we'll probably need this later."
+- When a convention below says "decide case-by-case" or "decided at plan time," that is YAGNI in
+  practice, not a gap to fill in preemptively.
+
+## Guiding principle: contract fidelity vs. internal freedom
+
+A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI?" questions:
+
+- **Anything an OpenAI SDK client can observe is the external contract and matches OpenAI
+  exactly, with zero deviation**: HTTP paths (including the `/v1` prefix), schema names, fields,
+  types, and optionality, enum values, the error envelope shape, HTTP status codes, the
+  streaming wire format (SSE chunk shape, `[DONE]` sentinel), resource ID format. This is
+  non-negotiable — it's the entire reason this project exists (constitution Principle I).
+- **Anything only visible inside this codebase is this project's own convention and has no
+  obligation to resemble how OpenAI (or anyone else) happens to be built internally**:
+  file/folder layout, internal module/function naming, service-layer structure, DB schema and
+  column types, logging format, test layout, commit workflow. Match OpenAI there only if it's
+  genuinely convenient, never because "OpenAI does it this way."
+- When in doubt: would a client importing the OpenAI SDK and pointing it at this server notice a
+  difference? If yes, it's contract — match exactly. If no, it's internal — use this repo's own
+  conventions below.
+
+## Project structure
+
+- **Feature-based organization**, not layer-based. Each feature gets its own folder with its own
+  `router.py`, `schemas.py`, and (only once needed, per YAGNI) `service.py`:
+  ```
+  apps/api/src/api/
+    chat/
+      router.py      # APIRouter, route functions
+      schemas.py      # Pydantic models for this feature
+      service.py       # only added once router.py has real business logic to extract
+    batches/
+      router.py
+      schemas.py
+      ...
+    app.py            # creates the FastAPI app, includes each feature's router
+  ```
+- Schemas are **not** centralized and do **not** mirror OpenAI's own file/module layout — they
+  live with the feature that uses them.
+- `packages/db` follows the same feature-oriented spirit for models: add a model module when a
+  feature needs one (e.g. `models/batches.py`), don't pre-create empty structure for features
+  that don't exist yet.
+- **Deliberately left open / decided later, per YAGNI:**
+  - Where batch worker code lives (`apps/worker` vs `packages/worker` vs inside `apps/api`) —
+    decide this when the batch-processing feature is actually planned (`/speckit-plan`).
+  - The concrete mechanism for the live-request-priority guarantee (constitution Principle IV) —
+    same, decided at plan time based on what the design needs.
+  - Soft delete vs. hard delete, and whether a resource needs extra lifecycle timestamp columns
+    (e.g. `cancelled_at`, `completed_at`) vs. a separate history table — there is no blanket rule;
+    this is a per-resource decision made in that resource's spec, based on what it actually needs
+    (e.g. a cancellable batch job plausibly needs `cancelled_at`; a simple synchronous resource
+    probably needs neither).
+
+## Code style & tooling
+
+- **Package manager**: `uv` workspace (root `pyproject.toml` `[tool.uv.workspace]` with members
+  `apps/api`, `packages/db`, and future packages). Add/upgrade dependencies with `uv add`/
+  `uv remove` scoped to the relevant package (`--project apps/api` etc.) — never a bare `pip
+  install`.
+- **Formatter/linter**: Ruff only, for both linting and formatting. Do not introduce Black,
+  isort, or Flake8 — Ruff replaces all of them.
+- **Line length**: 88 characters (Ruff/Black default).
+- **Type checking**: `mypy --strict` on every module. New or modified code MUST be fully typed
+  (no implicit `Any`, no untyped defs). Fix type errors rather than suppressing them with
+  `# type: ignore` unless the ignore has a comment explaining why it's unavoidable.
+- **Docstrings/comments**: minimal. Do not write docstrings or comments that restate what the
+  code does. Only add a short comment when there's a non-obvious WHY — a hidden constraint, a
+  workaround, a subtle invariant. Pydantic `Field(description=...)` follows the same rule: only
+  add it when the field's meaning, units, or constraints aren't obvious from its name and type.
+- **Imports**: absolute imports from the workspace packages (`api`, `db`); no deep relative
+  imports across package boundaries.
+- **Modern syntax, strictly enforced** (project requires Python >=3.14):
+  - `X | None`, never `Optional[X]`.
+  - Builtin generics (`list[str]`, `dict[str, int]`), never `List`/`Dict` from `typing`.
+  - f-strings only, never `%`-formatting or `.format()`.
+  - `StrEnum` for closed sets of string values; `match` statements where they genuinely fit.
+- **Pre-commit hooks**: a `.pre-commit-config.yaml` at the repo root runs `ruff check`,
+  `ruff format --check`, and `mypy` on staged files before a commit can complete. Set this up
+  once and keep it passing — it's the enforcement mechanism for everything in this section.
+
+## API & schema conventions
+
+- **Schema naming**: Pydantic classes use OpenAI's own schema names from its published OpenAPI
+  spec, verbatim (e.g. `CreateChatCompletionRequest`, `CreateChatCompletionResponse`,
+  `ChatCompletionChunk`, `Batch`, `BatchRequestInput`). Do not invent a local naming scheme
+  (`{Resource}In`/`Out` etc.) — if OpenAI has a name for it, use that name.
+- **Schema content**: field-for-field parity with OpenAI's schema (same names, types,
+  optionality). Local-only fields never get bolted onto an OpenAI-shaped model; if one is truly
+  needed it goes in its own separate, clearly-named model.
+- **Unknown fields**: Pydantic models use `extra="ignore"` — tolerate a client (or a newer OpenAI
+  SDK) sending fields we don't support yet rather than hard-rejecting the request.
+- **Enums**: OpenAI's string enum values (status fields like `"queued"`, `"in_progress"`,
+  `"completed"`) are represented as Python `StrEnum` classes whose member values match OpenAI's
+  documented strings exactly.
+- **List responses**: a paginated list endpoint (`/batches`, `/files`, etc.) returns OpenAI's list
+  envelope — `{"object": "list", "data": [...], "has_more": ..., "first_id": ..., "last_id": ...}`
+  — never a bare array.
+- **Error format**: all error responses use OpenAI's error envelope:
+  `{"error": {"message": ..., "type": ..., "param": ..., "code": ...}}`. Install an exception
+  handler that normalizes to this shape — never return FastAPI's default `{"detail": ...}` for an
+  API error. The specific `type`/`code` values and HTTP status for a given failure are decided
+  case-by-case against OpenAI's documented error types for that condition, not from a local enum
+  of error kinds.
+- **Routing**: every endpoint — including local-only ones with no OpenAI counterpart — is
+  mounted under `/v1`, no exceptions. Where an OpenAI counterpart exists, the path matches it
+  exactly (e.g. `/v1/chat/completions`, `/v1/batches`, `/v1/files`). This is what makes the
+  server a true drop-in for the OpenAI SDK — a client only changes `base_url` (e.g.
+  `http://localhost:8000/v1`), the same pattern Ollama's own OpenAI-compatible endpoint uses.
+- **Handlers**: every route handler is `async def`. All I/O (Ollama calls, DB access) uses async
+  clients/drivers (`httpx.AsyncClient`, async SQLAlchemy) — never a blocking call on the event
+  loop.
+- **Route declarations**: rely on the function's return type annotation (e.g.
+  `-> CreateChatCompletionResponse`) for the response schema. Don't also pass a redundant
+  `response_model=`. For an endpoint whose request has a `stream` flag (chat completions,
+  completions), branch inside one handler and return `StreamingResponse` on the streaming path —
+  FastAPI can't express "one Pydantic model or an SSE stream" as a single schema, so the return
+  annotation is a union (`CreateChatCompletionResponse | StreamingResponse`) and the streaming
+  branch's actual shape is governed by the **Streaming** convention below, not by the annotation.
+- **Streaming**: a `stream=true` endpoint is an `async def` generator yielding typed chunk models
+  (e.g. `ChatCompletionChunk` instances), serialized to `data: {...}\n\n` by a thin
+  `StreamingResponse` wrapper and terminated with `data: [DONE]\n\n`. Don't yield raw
+  pre-formatted strings from the generator itself.
+- **Resource IDs**: mirror OpenAI's prefixed ID format exactly (e.g. `chatcmpl-<random>`,
+  `batch_<random>`, `file-<random>`), generated with a short random suffix.
+- **Auth**: no API key required for now. The server is fully local, single-user. Don't add auth
+  scaffolding speculatively.
+
+## Database & migrations
+
+- **ORM naming**: singular PascalCase model class → plural snake_case table, e.g.
+  `class BatchJob(Base): __tablename__ = "batch_jobs"`.
+- **Primary keys**: a surrogate integer primary key, plus a separate unique-indexed external id
+  column holding the OpenAI-style string id (e.g. `id: int` PK, `external_id: str` unique). The
+  external id is what the API exposes; the integer PK is for internal joins/FKs.
+- **Timestamps**: API responses expose integer unix timestamps (matching OpenAI's `created`
+  field etc.); the underlying DB column is a proper timezone-aware `datetime`, converted to an
+  int only at the API boundary (in the schema, not the model).
+- **Delete strategy / lifecycle columns**: no blanket rule — decided per resource, in that
+  resource's spec, based on what it actually needs (see "Project structure" above).
+- **Migrations**: always generate via `alembic revision --autogenerate`, then review and correct
+  the generated migration yourself (Claude) before it's committed — autogenerate commonly misses
+  server-side defaults, enum changes, etc. There's no separate "pause and wait for a human" step
+  for migrations specifically; a human reviews it through the normal PR review, same as any other
+  change.
+- **Config/secrets**: `pydantic-settings` reading from a `.env` file for all configuration (DB
+  path/URL, Ollama host, etc.). Env vars are prefixed `LOCAL_LLM_` (e.g. `LOCAL_LLM_DB_PATH`,
+  `LOCAL_LLM_OLLAMA_HOST`) to avoid collisions. A `.env.example` with placeholder values is
+  committed; the real `.env` is gitignored. Do not hardcode connection strings or hosts in source
+  (replace the existing pattern in `packages/db/src/db/config.py` the next time that module is
+  touched).
+
+## Testing
+
+- **When**: every feature or fix ships with tests. Order is flexible — writing tests before or
+  after the implementation is both fine; strict TDD is not required.
+- **Stack**: pytest + pytest-asyncio + `httpx.AsyncClient` (via FastAPI's ASGI transport) for API
+  tests.
+- **Coverage**: no enforced minimum percentage. Judge sufficiency per change, not against a gate.
+- **Contract tests (required for every new/changed endpoint)**: validate the actual
+  request/response JSON against OpenAI's vendored OpenAPI spec (see below) — this is the
+  non-negotiable minimum for Principle I compliance. Additional unit/integration tests are added
+  where the change's risk warrants them.
+- **Ollama**: mocked by default in the regular test suite — fast, deterministic, runs anywhere.
+  A small set of tests marked `@pytest.mark.integration` hit a real local Ollama instance and are
+  run separately/manually, not as part of the default fast run.
+- **Test database**: a fresh in-memory SQLite database (`sqlite+aiosqlite:///:memory:`) per test,
+  with tables created fresh each time — full isolation, no cleanup logic needed.
+- **Layout**: a single flat `tests/` directory per workspace package (not mirroring the
+  feature-folder source structure 1:1); descriptive file names (e.g.
+  `test_chat_completions.py`). One root-level `conftest.py` per package holds shared fixtures
+  (test DB session, test client, settings override) — no per-feature `conftest.py` files.
+- **Vendored OpenAI spec**: lives at `/openai-spec/openapi.yaml` at the repo root, used by
+  contract tests to validate schemas. No automated sync job — refreshed by hand when a mismatch
+  is noticed or a new endpoint is being implemented.
+
+## Logging & observability
+
+- **Library**: Python's stdlib `logging` module with a small custom `Formatter` subclass that
+  emits JSON — no new dependency (`structlog` etc.) for this.
+- **Format**: structured JSON logs (one JSON object per line) from both the API process and
+  batch workers, so logs are machine-parseable for later tooling/dashboards.
+- Per-request token usage and batch/worker orchestration state are persisted to the SQLite DB
+  (constitution Principle V) — logs are for operational visibility, not the source of truth for
+  status or usage accounting.
+
+## Runtime / infra
+
+- **Ollama HTTP client**: a single `httpx.AsyncClient` created in FastAPI's lifespan startup,
+  reused for every request, closed on shutdown. Don't create a new client per call.
+
+## Documentation
+
+- **README**: update it only when setup/run steps actually change (adding a command, changing a
+  port, a new required env var). It is not required to document every feature — it's a setup
+  guide, not a feature overview.
+
+## Git & commit lifecycle
+
+- **Workflow**: feature branch + pull request for every change, including solo work — no direct
+  commits to `main`.
+- **Commit messages**: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`,
+  `chore:`, etc.), short imperative summary line.
+- **Commit granularity**: one atomic commit per logical change. Don't bundle unrelated changes
+  into a single commit.
+- **Merge strategy**: squash merge — a PR becomes one commit on `main` regardless of how many
+  commits it had on the branch.
+- **When Claude commits**: only when explicitly asked, per Claude Code's standard behavior.
+  Claude does not commit proactively just because a task finished.
+- **Pre-commit**: the `pre-commit` framework (see "Code style & tooling") gates every commit
+  locally with Ruff + mypy — this is the project's substitute for CI for now.
+
+## Spec-kit workflow & agent autonomy
+
+- **When spec-kit is required**: any new feature or endpoint goes through the full flow —
+  `/speckit-specify` → (`/speckit-clarify` as needed) → `/speckit-plan` → `/speckit-tasks` →
+  `/speckit-implement`. Small fixes (typos, a config tweak, a one-line bug fix) can be edited
+  directly without going through spec-kit.
+- **Local environment actions**: Claude has full autonomy to start/stop the dev server, run
+  `ollama pull`, and apply Alembic migrations as part of normal task execution, without asking
+  first.
+- **Dependencies**: Claude may add or upgrade a dependency within an existing workspace package
+  on its own judgment, as long as it fits the lightweight-server constraint (constitution
+  Principle III) and YAGNI — no need to ask first for routine additions. Adding a new workspace
+  package, or any dependency that pulls in an external runtime service (broker, queue, separate
+  DB engine, etc.), requires asking first — that's an architectural decision, not a routine one.
+- **CI**: none yet. `pre-commit` (see "Code style & tooling") plus a `pytest` run before
+  considering a change done is the substitute — there is no GitHub Actions gate doing this
+  automatically.
+- **Subagents/forks**: for research-heavy work in this repo (multi-file investigations,
+  codebase-wide audits, "where does X happen across the workspace" questions), proactively use a
+  fork rather than doing it all inline — this project explicitly opts into that, overriding the
+  more conservative global default of only forking when asked.
