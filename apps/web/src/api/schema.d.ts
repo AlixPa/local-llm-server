@@ -55,6 +55,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/analytics/chat-completions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Chat Completions */
+        get: operations["list_chat_completions_v1_analytics_chat_completions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analytics/chat-completions/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Chat Completions Summary */
+        get: operations["get_chat_completions_summary_v1_analytics_chat_completions_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -96,6 +130,73 @@ export interface components {
              */
             type: "allowed_tools";
             allowed_tools: components["schemas"]["ChatCompletionAllowedTools"];
+        };
+        /** ChatCompletionAnalyticsItem */
+        ChatCompletionAnalyticsItem: {
+            /** Id */
+            id: string;
+            /** Created */
+            created: number;
+            /** Model */
+            model: string;
+            status: components["schemas"]["ChatCompletionStatus"];
+            /** Stream */
+            stream: boolean;
+            /** N */
+            n: number;
+            /** Prompt Tokens */
+            prompt_tokens: number | null;
+            /** Completion Tokens */
+            completion_tokens: number | null;
+            /** Total Tokens */
+            total_tokens: number | null;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Time To First Token Ms */
+            time_to_first_token_ms: number | null;
+            /** Generation Duration Ms */
+            generation_duration_ms: number | null;
+            /** Load Duration Ms */
+            load_duration_ms: number | null;
+            /** Finish Reason */
+            finish_reason: string | null;
+            /** Error Type */
+            error_type: string | null;
+            /** Error Code */
+            error_code: string | null;
+        };
+        /** ChatCompletionAnalyticsList */
+        ChatCompletionAnalyticsList: {
+            /**
+             * Object
+             * @constant
+             */
+            object: "list";
+            /** Data */
+            data: components["schemas"]["ChatCompletionAnalyticsItem"][];
+            /** First Id */
+            first_id: string | null;
+            /** Last Id */
+            last_id: string | null;
+            /** Has More */
+            has_more: boolean;
+        };
+        /** ChatCompletionAnalyticsSummary */
+        ChatCompletionAnalyticsSummary: {
+            /** Request Count */
+            request_count: number;
+            /** Error Count */
+            error_count: number;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Avg Duration Ms */
+            avg_duration_ms: number | null;
+            /** Avg Time To First Token Ms */
+            avg_time_to_first_token_ms: number | null;
+            /** Avg Generation Duration Ms */
+            avg_generation_duration_ms: number | null;
         };
         /** ChatCompletionFunctionCallOption */
         ChatCompletionFunctionCallOption: {
@@ -323,6 +424,11 @@ export interface components {
             tool_calls?: components["schemas"]["ChatCompletionMessageToolCalls"] | null;
             function_call?: components["schemas"]["FunctionCall"] | null;
         };
+        /**
+         * ChatCompletionStatus
+         * @enum {string}
+         */
+        ChatCompletionStatus: "succeeded" | "failed" | "cancelled";
         /** ChatCompletionStreamOptions */
         ChatCompletionStreamOptions: {
             /** Include Usage */
@@ -804,6 +910,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListModelsResponse"];
+                };
+            };
+        };
+    };
+    list_chat_completions_v1_analytics_chat_completions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                after?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCompletionAnalyticsList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_chat_completions_summary_v1_analytics_chat_completions_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCompletionAnalyticsSummary"];
                 };
             };
         };

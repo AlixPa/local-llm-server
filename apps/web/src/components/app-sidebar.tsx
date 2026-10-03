@@ -1,4 +1,4 @@
-import { MessageSquareIcon } from "lucide-react";
+import { BarChart3Icon, MessageSquareIcon } from "lucide-react";
 import { NavLink, useMatch } from "react-router";
 import {
   Sidebar,
@@ -13,6 +13,7 @@ import {
 
 export function AppSidebar() {
   const isPlayground = useMatch("/playground") !== null;
+  const isAnalytics = useMatch("/analytics") !== null;
 
   return (
     <Sidebar>
@@ -28,6 +29,15 @@ export function AppSidebar() {
                 >
                   <MessageSquareIcon />
                   <span>Playground</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isAnalytics}
+                  render={<NavLink to="/analytics" />}
+                >
+                  <BarChart3Icon />
+                  <span>Analytics</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
