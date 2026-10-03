@@ -89,15 +89,15 @@ description: "Task list for Repository Reset & Foundation Setup"
 
 **Independent Test**: A new developer follows the README to a running server and passing tests.
 
-- [ ] T028 [US4] Rewrite root `README.md` as a setup guide only: prerequisites (uv, Python 3.14), `uv sync`, `cp .env.example .env`, `uv run pre-commit install`, `uv run alembic -c packages/db/alembic.ini upgrade head`, `uv run uvicorn api.app:app --reload`, `uv run pytest`, and the `LOCAL_LLM_DB_PATH` setting (relative to the working directory, so all commands run from the repo root); no feature descriptions, no mention of removed features
-- [ ] T029 [P] [US4] Verify FR-017: confirm no `llm`, `worker`, or `service.py` files exist and that root `pyproject.toml` workspace members list only `apps/api` and `packages/db` (adding a package later needs only a new `members` entry)
+- [X] T028 [US4] Rewrite root `README.md` as a setup guide only: prerequisites (uv, Python 3.14), `uv sync`, `cp .env.example .env`, `uv run pre-commit install`, `uv run alembic -c packages/db/alembic.ini upgrade head`, `uv run uvicorn api.app:app --reload`, `uv run pytest`, and the `LOCAL_LLM_DB_PATH` setting (relative to the working directory, so all commands run from the repo root); no feature descriptions, no mention of removed features
+- [X] T029 [P] [US4] Verify FR-017: confirm no `llm`, `worker`, or `service.py` files exist and that root `pyproject.toml` workspace members list only `apps/api` and `packages/db` (adding a package later needs only a new `members` entry)
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T030 Walk through `specs/001-repo-reset-setup/quickstart.md` from a fresh clone (or `git clean -xdf` of ignored files except `.venv`) and confirm outcomes 1–6; record any deviation by fixing the offending file
-- [ ] T031 [P] Check the default `uv run pytest` run time is under 30 s and needs no network/Ollama
+- [X] T030 Walk through `specs/001-repo-reset-setup/quickstart.md` from a fresh clone (or `git clean -xdf` of ignored files except `.venv`) and confirm outcomes 1–6; record any deviation by fixing the offending file
+- [X] T031 [P] Check the default `uv run pytest` run time is under 30 s and needs no network/Ollama
 - [X] T032 Constitution amendment (Principle I: additional endpoints allowed; Principle V: inference/worker recording only) done as v1.1.0 before implementation; `CLAUDE.md` updated accordingly
 
 ---
