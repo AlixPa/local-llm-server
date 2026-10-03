@@ -3,9 +3,9 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^openai-spec/
+        exclude: ^(openai-spec/|apps/web/(src/api/schema\.d\.ts|src/components/ui/|pnpm-lock\.yaml))
       - id: end-of-file-fixer
-        exclude: ^openai-spec/
+        exclude: ^(openai-spec/|apps/web/(src/api/schema\.d\.ts|src/components/ui/|pnpm-lock\.yaml))
       - id: check-yaml
         exclude: ^openai-spec/
       - id: check-toml
@@ -26,3 +26,16 @@ repos:
         language: system
         types: [python]
         exclude: ^packages/db/alembic/
+      - id: biome
+        name: biome
+        entry: bash -c 'cd apps/web && pnpm exec biome check --write --no-errors-on-unmatched --files-ignore-unknown=true "${@#apps/web/}"' --
+        language: system
+        files: ^apps/web/
+        exclude: ^apps/web/(src/api/schema\.d\.ts|src/components/ui/|pnpm-lock\.yaml)
+      - id: tsc
+        name: tsc
+        entry: pnpm --dir apps/web typecheck
+        language: system
+        files: ^apps/web/.*\.(ts|tsx|json)$
+        exclude: ^apps/web/(pnpm-lock\.yaml|biome\.json)
+        pass_filenames: false
