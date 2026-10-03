@@ -33,6 +33,12 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   file/folder layout, internal module/function naming, service-layer structure, DB schema and
   column types, logging format, test layout, commit workflow. Match OpenAI there only if it's
   genuinely convenient, never because "OpenAI does it this way."
+- **Additional (non-OpenAI) endpoints are allowed.** An endpoint OpenAI doesn't define (e.g.
+  `/v1/health`) can't break an SDK client, so it is free to exist. It still lives under `/v1`
+  and uses the standard error envelope, but its own behavior (paths, bodies, status codes,
+  error `type`/`code` values) follows strict industry conventions for that kind of endpoint,
+  not OpenAI's. The moment OpenAI does define an endpoint, ours MUST match OpenAI's contract
+  exactly, so check the vendored spec before inventing anything.
 - When in doubt: would a client importing the OpenAI SDK and pointing it at this server notice a
   difference? If yes, it's contract — match exactly. If no, it's internal — use this repo's own
   conventions below.
@@ -57,7 +63,10 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   live with the feature that uses them.
 - `packages/db` follows the same feature-oriented spirit for models: add a model module when a
   feature needs one (e.g. `models/batches.py`), don't pre-create empty structure for features
-  that don't exist yet.
+  that don't exist yet. The database *plumbing* is not speculative and exists from day one:
+  settings, the async engine/session factory/`get_session` (API), the sync engine/session
+  factory (Alembic, future workers), and the declarative `Base`. Models and repositories are
+  what start empty and arrive with the first feature that needs them.
 - **Deliberately left open / decided later, per YAGNI:**
   - Where batch worker code lives (`apps/worker` vs `packages/worker` vs inside `apps/api`) —
     decide this when the batch-processing feature is actually planned (`/speckit-plan`).
@@ -73,13 +82,18 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
 
 - **Package manager**: `uv` workspace (root `pyproject.toml` `[tool.uv.workspace]` with members
   `apps/api`, `packages/db`, and future packages). Add/upgrade dependencies with `uv add`/
-  `uv remove` scoped to the relevant package (`--project apps/api` etc.) — never a bare `pip
-  install`.
-- **Formatter/linter**: Ruff only, for both linting and formatting. Do not introduce Black,
-  isort, or Flake8 — Ruff replaces all of them.
+  `uv remove` scoped to the relevant package (`--project apps/api` etc., `--dev` for dev tools)
+  — never a bare `pip install`, and never hand-edit a dependency list in a `pyproject.toml`.
+  Prefer the plain package over "batteries" extras (e.g. `uvicorn`, not `uvicorn[standard]`)
+  unless an extra is actually needed.
+- **Formatter/linter**: Ruff only, for both linting and formatting, over all Python files
+  including Alembic migrations. Do not introduce Black, isort, or Flake8 — Ruff replaces all of
+  them. Alembic's `script.py.mako` is kept in line with the modern-syntax rules below so
+  generated migrations pass Ruff without hand-fixing.
 - **Line length**: 88 characters (Ruff/Black default).
-- **Type checking**: `mypy --strict` on every module. New or modified code MUST be fully typed
-  (no implicit `Any`, no untyped defs). Fix type errors rather than suppressing them with
+- **Type checking**: `mypy --strict` on every module, except `packages/db/alembic/` (generated
+  code whose logic we don't edit to satisfy a type checker). New or modified code MUST be fully
+  typed (no implicit `Any`, no untyped defs). Fix type errors rather than suppressing them with
   `# type: ignore` unless the ignore has a comment explaining why it's unavoidable.
 - **Docstrings/comments**: minimal. Do not write docstrings or comments that restate what the
   code does. Only add a short comment when there's a non-obvious WHY — a hidden constraint, a
@@ -92,9 +106,14 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   - Builtin generics (`list[str]`, `dict[str, int]`), never `List`/`Dict` from `typing`.
   - f-strings only, never `%`-formatting or `.format()`.
   - `StrEnum` for closed sets of string values; `match` statements where they genuinely fit.
-- **Pre-commit hooks**: a `.pre-commit-config.yaml` at the repo root runs `ruff check`,
-  `ruff format --check`, and `mypy` on staged files before a commit can complete. Set this up
-  once and keep it passing — it's the enforcement mechanism for everything in this section.
+- **Pre-commit hooks**: a `.pre-commit-config.yaml` at the repo root, following standard
+  pre-commit practice: pinned hook repos, hooks receive only the staged files and are filtered by
+  file type, so a docs-only commit skips the Python hooks entirely. It runs Ruff (lint with
+  `--fix`, and format) via `astral-sh/ruff-pre-commit`, mypy as a `uv run` local hook (so it
+  sees workspace packages) on staged Python files outside Alembic, and the usual hygiene hooks
+  (`pre-commit-hooks`: trailing whitespace, end-of-file, YAML/TOML validity, merge-conflict
+  markers, large files; vendored `openai-spec/` excluded). Set this up once and keep it
+  passing — it's the enforcement mechanism for everything in this section.
 
 ## API & schema conventions
 
@@ -116,9 +135,11 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
 - **Error format**: all error responses use OpenAI's error envelope:
   `{"error": {"message": ..., "type": ..., "param": ..., "code": ...}}`. Install an exception
   handler that normalizes to this shape — never return FastAPI's default `{"detail": ...}` for an
-  API error. The specific `type`/`code` values and HTTP status for a given failure are decided
-  case-by-case against OpenAI's documented error types for that condition, not from a local enum
-  of error kinds.
+  API error. For OpenAI endpoints, the specific `type`/`code` values and HTTP status for a given
+  failure follow OpenAI's documented behavior for that condition. For all other endpoints and
+  generic framework errors (unknown route, wrong method, …) they follow standard HTTP
+  semantics, with `code` being the snake_case HTTP reason (`not_found`,
+  `method_not_allowed`) and `null` for unexpected 500s. No local enum of error kinds.
 - **Routing**: every endpoint — including local-only ones with no OpenAI counterpart — is
   mounted under `/v1`, no exceptions. Where an OpenAI counterpart exists, the path matches it
   exactly (e.g. `/v1/chat/completions`, `/v1/batches`, `/v1/files`). This is what makes the
@@ -126,7 +147,8 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   `http://localhost:8000/v1`), the same pattern Ollama's own OpenAI-compatible endpoint uses.
 - **Handlers**: every route handler is `async def`. All I/O (Ollama calls, DB access) uses async
   clients/drivers (`httpx.AsyncClient`, async SQLAlchemy) — never a blocking call on the event
-  loop.
+  loop. The sync DB engine exists only for code that is not on the event loop (Alembic,
+  worker processes).
 - **Route declarations**: rely on the function's return type annotation (e.g.
   `-> CreateChatCompletionResponse`) for the response schema. Don't also pass a redundant
   `response_model=`. For an endpoint whose request has a `stream` flag (chat completions,
@@ -169,14 +191,17 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
 
 ## Testing
 
-- **When**: every feature or fix ships with tests. Order is flexible — writing tests before or
-  after the implementation is both fine; strict TDD is not required.
+- **When**: be practical — a feature or fix ships with tests when it carries logic or risk worth
+  protecting (behavior, contracts, parsing, migrations, bug regressions). Pure plumbing and
+  trivial wiring (logging setup, config loading, one-line fixes) don't need their own tests.
+  Order is flexible — before or after the implementation; strict TDD is not required.
 - **Stack**: pytest + pytest-asyncio + `httpx.AsyncClient` (via FastAPI's ASGI transport) for API
   tests.
 - **Coverage**: no enforced minimum percentage. Judge sufficiency per change, not against a gate.
-- **Contract tests (required for every new/changed endpoint)**: validate the actual
-  request/response JSON against OpenAI's vendored OpenAPI spec (see below) — this is the
-  non-negotiable minimum for Principle I compliance. Additional unit/integration tests are added
+- **Contract tests (required for every new/changed OpenAI-defined endpoint)**: validate the
+  actual request/response JSON against OpenAI's vendored OpenAPI spec (see below) — this is the
+  non-negotiable minimum for Principle I compliance. Additional non-OpenAI endpoints get an
+  ordinary behavior test instead. Additional unit/integration tests are added
   where the change's risk warrants them.
 - **Ollama**: mocked by default in the regular test suite — fast, deterministic, runs anywhere.
   A small set of tests marked `@pytest.mark.integration` hit a real local Ollama instance and are
@@ -197,14 +222,16 @@ A second axis, orthogonal to YAGNI, that resolves most "should this match OpenAI
   emits JSON — no new dependency (`structlog` etc.) for this.
 - **Format**: structured JSON logs (one JSON object per line) from both the API process and
   batch workers, so logs are machine-parseable for later tooling/dashboards.
-- Per-request token usage and batch/worker orchestration state are persisted to the SQLite DB
-  (constitution Principle V) — logs are for operational visibility, not the source of truth for
-  status or usage accounting.
+- Token usage for inference requests and batch/worker orchestration state are persisted to the
+  SQLite DB (constitution Principle V) — logs are for operational visibility, not the source of
+  truth for status or usage accounting. Whether any other endpoint records anything is decided
+  per endpoint, based on what it does (a health check records nothing).
 
 ## Runtime / infra
 
-- **Ollama HTTP client**: a single `httpx.AsyncClient` created in FastAPI's lifespan startup,
-  reused for every request, closed on shutdown. Don't create a new client per call.
+- **Ollama access** will live in a future `llm` workspace package, not in `apps/api`; its shape
+  (including the shared `httpx.AsyncClient` — one client reused for every request, closed on
+  shutdown, never one per call) is decided when that package is planned.
 
 ## Documentation
 

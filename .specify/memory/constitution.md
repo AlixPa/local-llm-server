@@ -1,4 +1,10 @@
 <!--
+Amendment 1.1.0 (2026-10-03):
+  - Principle I: additional non-OpenAI endpoints are allowed (no longer required to sit on a
+    "distinct, clearly separated path"); OpenAI-defined endpoints must match OpenAI exactly.
+  - Principle V: usage/orchestration recording applies to inference requests and worker
+    executions, not literally every API call.
+
 Sync Impact Report
 ===================
 Version change: N/A (unfilled template) → 1.0.0
@@ -31,9 +37,10 @@ The server MUST implement the OpenAI-compatible OpenAPI contract for every endpo
 starting with chat/completions and completions and extending to the batch endpoints (file upload,
 batch create, batch retrieve/cancel, etc.). Request and response schemas MUST match the
 corresponding OpenAI API shape closely enough that existing OpenAI SDK clients work against this
-server by changing only the base URL. A new endpoint MUST NOT be added unless it has a
-corresponding OpenAI API counterpart, or it is explicitly scoped and documented as a local-only
-extension under a distinct, clearly separated path.
+server by changing only the base URL. Where OpenAI defines an endpoint, ours MUST follow its
+contract exactly. Additional endpoints with no OpenAI counterpart are allowed, since they cannot
+break an OpenAI SDK client; they MUST NOT shadow or alter any OpenAI-defined path, and follow
+standard industry conventions for their own behavior.
 
 Rationale: drop-in compatibility with OpenAI's client ecosystem is this project's core value
 proposition — it is what lets existing OpenAI-client tooling point at a private, local deployment
@@ -72,9 +79,10 @@ Rationale: the batch API exists to make use of otherwise-idle local capacity; it
 allowed to starve the interactive, user-facing use case that the server primarily exists to serve.
 
 ### V. State & Observability via SQLite
-Every API call and every worker execution MUST be recorded in the SQLite database: per-request
-token usage (prompt/completion/total) attributable to its endpoint, and batch job/worker
-orchestration state (queued, running, completed, failed, retried). This database is the single
+Every inference request and every worker execution MUST be recorded in the SQLite database:
+per-request token usage (prompt/completion/total) attributable to its endpoint, and batch
+job/worker orchestration state (queued, running, completed, failed, retried). Other endpoints
+(e.g. health checks) record only what their purpose requires. This database is the single
 source of truth for status endpoints and usage accounting — reported status MUST be derived from
 the database, not from in-memory state alone, so it survives process restarts and crashes.
 
@@ -114,4 +122,4 @@ attention to Principle II (local-only inference) and Principle IV (live-request 
 deviation MUST be called out explicitly and justified in the relevant spec or plan rather than left
 implicit.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
+**Version**: 1.1.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
