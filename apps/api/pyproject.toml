@@ -8,13 +8,9 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "asyncpg>=0.31.0",
     "db",
     "fastapi>=0.141.1",
-    "httpx>=0.28.1",
-    "python-multipart>=0.0.32",
-    "rich>=15.0.0",
-    "uvicorn[standard]>=0.52.4",
+    "uvicorn>=0.54.0",
 ]
 
 [build-system]

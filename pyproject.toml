@@ -11,3 +11,34 @@ members = [
     "apps/api",
     "packages/db",
 ]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "jsonschema>=4.26.0",
+    "mypy>=2.4.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pyyaml>=6.0.3",
+    "ruff>=0.16.10",
+    "types-jsonschema>=4.26.0.20260518",
+    "types-pyyaml>=6.0.12.20260906",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+
+[tool.mypy]
+strict = true
+# generated code
+exclude = ["packages/db/alembic/"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["integration: hits a real local Ollama instance"]
+addopts = "-m 'not integration'"
+testpaths = ["apps/api/tests", "packages/db/tests"]

@@ -17,10 +17,10 @@ description: "Task list for Repository Reset & Foundation Setup"
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Root tooling config: keep workspace members `apps/api` and `packages/db`; add dev tools with `uv add --dev ruff mypy pytest pytest-asyncio httpx pre-commit jsonschema pyyaml types-PyYAML types-jsonschema`; add to root `pyproject.toml` `[tool.ruff]` (`line-length = 88`, lint select `E,F,I,UP,B,ASYNC,RUF`; applies to all Python incl. Alembic), `[tool.mypy]` (`strict = true`, `exclude = ["packages/db/alembic/"]` with a comment: generated code), and `[tool.pytest.ini_options]` (`asyncio_mode = "auto"`, marker `integration`, `addopts = "-m 'not integration'"`, `testpaths = ["apps/api/tests", "packages/db/tests"]`)
-- [ ] T002 [P] API dependencies via `uv`: `uv remove --project apps/api asyncpg httpx python-multipart rich` (and any other unused), then ensure only `db`, `fastapi`, `uvicorn` (plain, no `[standard]`) remain via `uv add --project apps/api`; `pydantic-settings` moves to `db` (T003); `uv.lock` regenerated at the end of T003
-- [ ] T003 [P] DB dependencies via `uv`: `uv remove --project packages/db psycopg` (and other Postgres drivers); `uv add --project packages/db alembic aiosqlite pydantic-settings "sqlalchemy[asyncio]"`; then run `uv sync` to regenerate `uv.lock`
-- [ ] T004 [P] Create `.env.example` at repo root containing `LOCAL_LLM_DB_PATH=data/local_llm.db`; confirm `.env` and `/data/` are already in `.gitignore` (no `.gitignore` change expected)
+- [X] T001 Root tooling config: keep workspace members `apps/api` and `packages/db`; add dev tools with `uv add --dev ruff mypy pytest pytest-asyncio httpx pre-commit jsonschema pyyaml types-PyYAML types-jsonschema`; add to root `pyproject.toml` `[tool.ruff]` (`line-length = 88`, lint select `E,F,I,UP,B,ASYNC,RUF`; applies to all Python incl. Alembic), `[tool.mypy]` (`strict = true`, `exclude = ["packages/db/alembic/"]` with a comment: generated code), and `[tool.pytest.ini_options]` (`asyncio_mode = "auto"`, marker `integration`, `addopts = "-m 'not integration'"`, `testpaths = ["apps/api/tests", "packages/db/tests"]`)
+- [X] T002 [P] API dependencies via `uv`: `uv remove --project apps/api asyncpg httpx python-multipart rich` (and any other unused), then ensure only `db`, `fastapi`, `uvicorn` (plain, no `[standard]`) remain via `uv add --project apps/api`; `pydantic-settings` moves to `db` (T003); `uv.lock` regenerated at the end of T003
+- [X] T003 [P] DB dependencies via `uv`: `uv remove --project packages/db psycopg` (and other Postgres drivers); `uv add --project packages/db alembic aiosqlite pydantic-settings "sqlalchemy[asyncio]"`; then run `uv sync` to regenerate `uv.lock`
+- [X] T004 [P] Create `.env.example` at repo root containing `LOCAL_LLM_DB_PATH=data/local_llm.db`; confirm `.env` and `/data/` are already in `.gitignore` (no `.gitignore` change expected)
 
 ---
 
