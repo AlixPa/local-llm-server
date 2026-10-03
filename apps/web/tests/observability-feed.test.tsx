@@ -111,3 +111,22 @@ test("load more passes last_id as the after cursor", async () => {
   expect(afterValues).toEqual([null, "1"]);
   expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
 });
+
+test("renders an interrupted request distinctly from canceled", async () => {
+  server.use(
+    http.get("*/v1/observability/requests", () =>
+      HttpResponse.json(
+        list([
+          item(2, { outcome: "interrupted", duration_ms: null, http_status: null }),
+          item(1, { outcome: "canceled" }),
+        ]),
+      ),
+    ),
+  );
+  renderWithProviders(<App />, "/observability");
+
+  const rows = await screen.findAllByRole("row");
+  const interrupted = rowAt(rows, 1).getByText("interrupted");
+  expect(interrupted).toHaveClass("border-dashed");
+  expect(rowAt(rows, 2).getByText("canceled")).not.toHaveClass("border-dashed");
+});

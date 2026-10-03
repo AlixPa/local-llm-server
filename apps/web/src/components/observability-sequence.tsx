@@ -102,7 +102,12 @@ function StepRow({ layout }: { layout: StepLayout }) {
             {step.duration_ms !== null && ` · took ${formatMs(step.duration_ms)}`}
           </span>
           {step.status !== "completed" && (
-            <Badge variant={layout.failed ? "destructive" : "outline"}>
+            <Badge
+              variant={
+                layout.failed ? "destructive" : layout.interrupted ? "ghost" : "outline"
+              }
+              className={layout.interrupted ? "border border-dashed" : undefined}
+            >
               {step.status.replace("_", " ")}
             </Badge>
           )}

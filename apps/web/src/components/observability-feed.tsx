@@ -28,7 +28,7 @@ const OUTCOME_VARIANT = {
   success: "secondary",
   error: "destructive",
   canceled: "outline",
-  interrupted: "outline",
+  interrupted: "ghost",
 } as const;
 
 const CONNECTION_LABEL = {
@@ -96,7 +96,12 @@ export function ObservabilityFeed({
                 <TableCell>{item.method}</TableCell>
                 <TableCell>{item.summary ?? "—"}</TableCell>
                 <TableCell>
-                  <Badge variant={OUTCOME_VARIANT[item.outcome]}>
+                  <Badge
+                    variant={OUTCOME_VARIANT[item.outcome]}
+                    className={
+                      item.outcome === "interrupted" ? "border-dashed" : undefined
+                    }
+                  >
                     {item.outcome.replace("_", " ")}
                   </Badge>
                 </TableCell>

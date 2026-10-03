@@ -179,3 +179,17 @@ test("an open detail keeps refreshing while the list is paused", async () => {
 
   await within(workflow).findByText("took 700 ms", { exact: false });
 });
+
+test("an interrupted step is badged and styled distinctly", async () => {
+  serve(() => [step(0, {}), step(1, { ...SENT, status: "interrupted" })]);
+
+  const { workflow } = await openDetail();
+
+  const interrupted = within(workflow)
+    .getAllByRole("listitem")
+    .find((li) => li.dataset.status === "interrupted");
+  if (!interrupted) throw new Error("Missing interrupted step");
+  expect(interrupted).toHaveClass("border-dashed");
+  expect(within(interrupted).getByText("interrupted")).toHaveClass("border-dashed");
+  expect(within(workflow).queryByRole("alert")).not.toBeInTheDocument();
+});
