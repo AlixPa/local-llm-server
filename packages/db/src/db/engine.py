@@ -1,7 +1,8 @@
 from collections.abc import AsyncIterator
 from functools import lru_cache
+from sqlite3 import Connection
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -13,9 +14,22 @@ from sqlalchemy.orm import Session, sessionmaker
 from db.config import get_settings
 
 
+def _enable_foreign_keys(engine: Engine) -> Engine:
+    # SQLite ignores foreign keys unless enabled on every new connection
+    @event.listens_for(engine, "connect")
+    def _on_connect(dbapi_connection: Connection, _: object) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    return engine
+
+
 @lru_cache
 def get_async_engine() -> AsyncEngine:
-    return create_async_engine(get_settings().async_url)
+    engine = create_async_engine(get_settings().async_url)
+    _enable_foreign_keys(engine.sync_engine)
+    return engine
 
 
 @lru_cache
@@ -30,7 +44,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 @lru_cache
 def get_sync_engine() -> Engine:
-    return create_engine(get_settings().sync_url)
+    return _enable_foreign_keys(create_engine(get_settings().sync_url))
 
 
 @lru_cache
