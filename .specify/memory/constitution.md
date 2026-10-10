@@ -58,8 +58,13 @@ per-request token usage (prompt/completion/total) attributable to its endpoint, 
 job/worker orchestration state (queued, running, completed, failed, retried). Recording is from
 an LLM-usage point of view, not a server point of view: a request is recorded once it reaches
 generation logic (including later failures and cancellations), while requests rejected by schema
-validation before that point attempt no inference and need not be recorded. Other endpoints
-(e.g. health checks) record only what their purpose requires. This database is the single
+validation before that point attempt no inference and need not be recorded. In addition, the API's
+own point of view MUST be recorded for every endpoint whose workflow has diagnostic value (e.g.
+inference endpoints): the request received, each exchange with Ollama (what was sent and
+received), and the response returned, so workflows can be reconstructed from the database.
+Endpoints with little diagnostic value (model listing, analytics, health checks) are not
+recorded. Each new endpoint's spec MUST explicitly decide whether it is tracked (extending the
+schema or reusing the generic tracing tables) and whether the observability UI supports it. This database is the single
 source of truth for status endpoints and usage accounting — reported status MUST be derived from
 the database, not from in-memory state alone, so it survives process restarts and crashes. Any UI view of
 usage, logs, or batch status MUST be fed by API endpoints reading this database.
@@ -102,8 +107,7 @@ in-memory state.
 ## Governance
 
 This constitution supersedes other project conventions and prior practice when they conflict.
-Amendments are made by editing this file, recording a Sync Impact Report as an HTML comment at the
-top of the amended version, and bumping the version according to semantic versioning: MAJOR for a
+Amendments are made by editing this file and bumping the version according to semantic versioning: MAJOR for a
 backward-incompatible removal or redefinition of a principle, MINOR for a new principle or
 materially expanded guidance, PATCH for clarifications or wording fixes with no semantic change.
 Every feature spec and plan SHOULD state its compliance with these principles, with particular
@@ -111,4 +115,4 @@ attention to Principle II (local-only inference) and Principle IV (live-request 
 deviation MUST be called out explicitly and justified in the relevant spec or plan rather than left
 implicit.
 
-**Version**: 1.2.1 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03
+**Version**: 1.3.0 | **Ratified**: 2026-10-03 | **Last Amended**: 2026-10-03

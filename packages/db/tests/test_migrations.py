@@ -29,5 +29,7 @@ def test_upgrade_head_creates_tables(
         "chat_completion_records",
         "chat_completion_contents",
         "models",
+        "traced_requests",
+        "workflow_steps",
     }
     clear_caches()
