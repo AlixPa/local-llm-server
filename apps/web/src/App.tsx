@@ -3,7 +3,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AnalyticsPage } from "@/pages/analytics";
 import { ObservabilityPage } from "@/pages/observability";
-import { PlaygroundPage } from "@/pages/playground";
+import { PlaygroundChatPage } from "@/pages/playground-chat";
+import { PlaygroundResponsesPage } from "@/pages/playground-responses";
 
 export function App() {
   return (
@@ -11,8 +12,9 @@ export function App() {
       <AppSidebar />
       <SidebarInset>
         <Routes>
-          <Route path="/" element={<Navigate to="/playground" replace />} />
-          <Route path="/playground" element={<PlaygroundPage />} />
+          <Route path="/" element={<Navigate to="/playground/chat" replace />} />
+          <Route path="/playground/chat" element={<PlaygroundChatPage />} />
+          <Route path="/playground/responses" element={<PlaygroundResponsesPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/observability" element={<ObservabilityPage />} />
         </Routes>

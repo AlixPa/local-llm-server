@@ -8,113 +8,86 @@ import { server } from "./server";
 
 const MODELS = {
   object: "list",
-  data: [
-    { id: "qwen3:8b", object: "model", created: 1, owned_by: "ollama" },
-    { id: "qwen3:4b", object: "model", created: 1, owned_by: "ollama" },
-  ],
+  data: [{ id: "qwen3:8b", object: "model", created: 1, owned_by: "ollama" }],
 };
 
-function completion(content: string) {
+function response(text: string) {
   return {
-    id: "chatcmpl-1",
-    object: "chat.completion",
-    created: 1,
+    id: "resp_1",
+    object: "response",
+    created_at: 1,
+    status: "completed",
     model: "qwen3:8b",
-    choices: [
+    output: [
       {
-        index: 0,
-        message: { role: "assistant", content },
-        logprobs: null,
-        finish_reason: "stop",
+        type: "message",
+        id: "msg_1",
+        status: "completed",
+        role: "assistant",
+        content: [{ type: "output_text", text, annotations: [] }],
       },
     ],
   };
 }
 
-function chunk(content: string): string {
-  return `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content } }] })}\n\n`;
-}
-
-function mockModels() {
-  server.use(http.get("*/v1/models", () => HttpResponse.json(MODELS)));
+function delta(text: string): string {
+  return `event: response.output_text.delta\ndata: ${JSON.stringify({
+    type: "response.output_text.delta",
+    delta: text,
+  })}\n\n`;
 }
 
 async function renderPlayground() {
-  mockModels();
+  server.use(http.get("*/v1/models", () => HttpResponse.json(MODELS)));
   const user = userEvent.setup();
-  renderWithProviders(<App />, "/playground");
-  await screen.findByRole("combobox", { name: "model" });
+  renderWithProviders(<App />, "/playground/responses");
   await waitFor(() =>
     expect(screen.getByRole("combobox", { name: "model" })).toHaveTextContent(
       "qwen3:8b",
     ),
   );
-  await user.type(screen.getByRole("textbox", { name: "Message 1" }), "Hello");
+  await user.type(screen.getByRole("textbox", { name: "Input" }), "Hello");
   return user;
 }
 
-test("a non-streamed message shows the answer and a history entry", async () => {
-  const user = await renderPlayground();
-  server.use(
-    http.post("*/v1/chat/completions", () => HttpResponse.json(completion("Hi there"))),
-  );
-
-  await user.click(screen.getByRole("button", { name: "Send" }));
-
-  expect(await screen.findByText("Hi there")).toBeInTheDocument();
-  await user.click(await screen.findByRole("button", { name: /#1/ }));
-  expect(screen.getByText(/"model": "qwen3:8b"/)).toBeInTheDocument();
-});
-
-test("the model selector lists served models and the default is sent", async () => {
-  const user = await renderPlayground();
-  let body: unknown;
-  server.use(
-    http.post("*/v1/chat/completions", async ({ request }) => {
-      body = await request.json();
-      return HttpResponse.json(completion("ok"));
-    }),
-  );
-
-  await user.click(screen.getByRole("combobox", { name: "model" }));
-  expect(await screen.findByRole("option", { name: "qwen3:4b" })).toBeInTheDocument();
-  await user.click(screen.getByRole("option", { name: "qwen3:8b" }));
-  await user.click(screen.getByRole("button", { name: "Send" }));
-
-  await screen.findByText("ok");
-  expect(body).toMatchObject({ model: "qwen3:8b" });
-});
-
-test("untouched options are not sent, a changed temperature is", async () => {
+test("a non-streamed request shows the full answer and builds the body", async () => {
   const user = await renderPlayground();
   let body: Record<string, unknown> = {};
   server.use(
-    http.post("*/v1/chat/completions", async ({ request }) => {
+    http.post("*/v1/responses", async ({ request }) => {
       const json: unknown = await request.json();
       if (typeof json === "object" && json !== null) {
         body = Object.fromEntries(Object.entries(json));
       }
-      return HttpResponse.json(completion("ok"));
+      return HttpResponse.json(response("Hi there"));
     }),
   );
 
+  await user.type(screen.getByRole("textbox", { name: "Instructions" }), "Be brief");
   await user.type(screen.getByLabelText("temperature"), "0.2");
   await user.click(screen.getByRole("button", { name: "Send" }));
 
-  await screen.findByText("ok");
-  expect(body.temperature).toBe(0.2);
+  expect(await screen.findByText("Hi there")).toBeInTheDocument();
+  expect(body).toMatchObject({
+    model: "qwen3:8b",
+    input: "Hello",
+    instructions: "Be brief",
+    temperature: 0.2,
+  });
   expect(body).not.toHaveProperty("top_p");
-  expect(body).not.toHaveProperty("n");
+  expect(await screen.findByRole("button", { name: /#1/ })).toHaveTextContent(
+    "completed",
+  );
 });
 
 test("a streamed response renders progressively and cancel stops it", async () => {
   const user = await renderPlayground();
   const encoder = new TextEncoder();
   server.use(
-    http.post("*/v1/chat/completions", ({ request }) => {
+    http.post("*/v1/responses", ({ request }) => {
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
-          controller.enqueue(encoder.encode(chunk("Hel")));
+          controller.enqueue(encoder.encode(delta("Hel")));
           request.signal.addEventListener("abort", () => {
             try {
               controller.close();
@@ -144,10 +117,31 @@ test("a streamed response renders progressively and cancel stops it", async () =
   );
 });
 
-test("a server error is shown verbatim and logged in history", async () => {
+test("a stream that ends without [DONE] completes", async () => {
   const user = await renderPlayground();
   server.use(
-    http.post("*/v1/chat/completions", () =>
+    http.post(
+      "*/v1/responses",
+      () =>
+        new HttpResponse(delta("Done") + delta("!"), {
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+    ),
+  );
+
+  await user.click(screen.getByRole("switch", { name: "stream" }));
+  await user.click(screen.getByRole("button", { name: "Send" }));
+
+  expect(await screen.findByText("Done!")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: /#1/ })).toHaveTextContent(
+    "completed",
+  );
+});
+
+test("a server error is shown as-is in its history entry", async () => {
+  const user = await renderPlayground();
+  server.use(
+    http.post("*/v1/responses", () =>
       HttpResponse.json(
         {
           error: {
@@ -168,4 +162,12 @@ test("a server error is shown verbatim and logged in history", async () => {
     "The model `x` does not exist or you do not have access to it.",
   );
   expect(await screen.findByRole("button", { name: /#1/ })).toHaveTextContent("failed");
+});
+
+test("history holds only Responses entries", async () => {
+  const user = await renderPlayground();
+  server.use(http.post("*/v1/responses", () => HttpResponse.json(response("one"))));
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  await screen.findByText("one");
+  expect(screen.getAllByRole("button", { name: /^#\d/ })).toHaveLength(1);
 });

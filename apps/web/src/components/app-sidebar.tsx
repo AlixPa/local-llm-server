@@ -9,10 +9,14 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 
 export function AppSidebar() {
-  const isPlayground = useMatch("/playground") !== null;
+  const isChat = useMatch("/playground/chat") !== null;
+  const isResponses = useMatch("/playground/responses") !== null;
   const isAnalytics = useMatch("/analytics") !== null;
   const isObservability = useMatch("/observability") !== null;
 
@@ -24,13 +28,28 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={isPlayground}
-                  render={<NavLink to="/playground" />}
-                >
+                <SidebarMenuButton render={<div />}>
                   <MessageSquareIcon />
                   <span>Playground</span>
                 </SidebarMenuButton>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      isActive={isChat}
+                      render={<NavLink to="/playground/chat" />}
+                    >
+                      <span>Chat</span>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      isActive={isResponses}
+                      render={<NavLink to="/playground/responses" />}
+                    >
+                      <span>Responses</span>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
