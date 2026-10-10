@@ -147,8 +147,8 @@ Python: `mypy --strict`, Ruff, 88 cols, `X | None`, builtin generics, minimal co
 ## Phase 7: Polish & Cross-Cutting
 
 - [ ] T038 Run the quickstart (`specs/004-responses-endpoint/quickstart.md`) sections 1–3 by hand against a real Ollama: curl non-stream/stream, OpenAI SDK, failure checks, sidebar/playground/Analytics/Observability flows; verify SC-004 (first stream content ≤ 2 s in the playground) and SC-007 (new request visible ≤ 1 s); both are manual-only checks, pass = measured value within the limit on the target machine, repeated 3 times. Also check the Playground sub-navigation is usable with the sidebar collapsed and at a narrow window width.
-- [ ] T039 Update `apps/api/README.md` / root `README.md` **only if** setup/run steps changed (none expected; skip otherwise). Confirm `CLAUDE.md` "Streaming" convention text already matches the per-endpoint stream formats (it was amended during planning).
-- [ ] T040 Final gates ("done means"): `uv run pytest`, `uv run pre-commit run --all-files`, `pnpm --dir apps/web check && pnpm --dir apps/web typecheck && pnpm --dir apps/web test`; confirm chat suites passed with unchanged expectations (SC-009, apart from analytics/filter tests). Do not commit unless asked.
+- [X] T039 Update `apps/api/README.md` / root `README.md` **only if** setup/run steps changed (none expected; skip otherwise). Confirm `CLAUDE.md` "Streaming" convention text already matches the per-endpoint stream formats (it was amended during planning).
+- [X] T040 Final gates ("done means"): `uv run pytest`, `uv run pre-commit run --all-files`, `pnpm --dir apps/web check && pnpm --dir apps/web typecheck && pnpm --dir apps/web test`; confirm chat suites passed with unchanged expectations (SC-009, apart from analytics/filter tests). Do not commit unless asked.
 
 ---
 
