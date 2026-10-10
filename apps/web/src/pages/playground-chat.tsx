@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { type CreateChatCompletionRequest, useCreateChatCompletion } from "@/api/chat";
 import { useModels } from "@/api/models";
 import { type HistoryEntry, PlaygroundHistory } from "@/components/playground-history";
@@ -35,6 +35,7 @@ export function PlaygroundChatPage() {
   const [values, setValues] = useState<OptionValues>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -82,13 +83,22 @@ export function PlaygroundChatPage() {
       );
       return;
     }
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const response = await completion.mutateAsync(body);
+      const response = await completion.mutateAsync({
+        body,
+        signal: controller.signal,
+      });
       const answer = response.choices
         .map((choice) => choice.message.content ?? JSON.stringify(choice.message))
         .join("\n\n");
       record(body, "completed", answer, null);
     } catch (caught) {
+      if (controller.signal.aborted) {
+        record(body, "cancelled", "", null);
+        return;
+      }
       record(
         body,
         "failed",
@@ -96,6 +106,11 @@ export function PlaygroundChatPage() {
         caught instanceof Error ? caught.message : "Request failed",
       );
     }
+  };
+
+  const cancel = () => {
+    abortRef.current?.abort();
+    stream.cancel();
   };
 
   const shown = stream.isStreaming ? { answer: stream.text, error: null } : result;
@@ -122,12 +137,7 @@ export function PlaygroundChatPage() {
               >
                 Send
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={stream.cancel}
-                disabled={!stream.isStreaming}
-              >
+              <Button type="button" variant="outline" onClick={cancel} disabled={!busy}>
                 Cancel
               </Button>
             </div>

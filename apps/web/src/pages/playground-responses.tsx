@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useModels } from "@/api/models";
 import { type CreateResponse, useCreateResponse } from "@/api/responses";
 import { type HistoryEntry, PlaygroundHistory } from "@/components/playground-history";
@@ -56,6 +56,7 @@ export function PlaygroundResponsesPage() {
   const [values, setValues] = useState<OptionValues>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -103,10 +104,16 @@ export function PlaygroundResponsesPage() {
       );
       return;
     }
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const response = await creation.mutateAsync(body);
+      const response = await creation.mutateAsync({ body, signal: controller.signal });
       record(body, "completed", outputTextOf(response.output), null);
     } catch (caught) {
+      if (controller.signal.aborted) {
+        record(body, "cancelled", "", null);
+        return;
+      }
       record(
         body,
         "failed",
@@ -114,6 +121,11 @@ export function PlaygroundResponsesPage() {
         caught instanceof Error ? caught.message : "Request failed",
       );
     }
+  };
+
+  const cancel = () => {
+    abortRef.current?.abort();
+    stream.cancel();
   };
 
   const shown = stream.isStreaming ? { answer: stream.text, error: null } : result;
@@ -140,12 +152,7 @@ export function PlaygroundResponsesPage() {
               >
                 Send
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={stream.cancel}
-                disabled={!stream.isStreaming}
-              >
+              <Button type="button" variant="outline" onClick={cancel} disabled={!busy}>
                 Cancel
               </Button>
             </div>

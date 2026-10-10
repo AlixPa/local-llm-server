@@ -7,8 +7,14 @@ export type CreateChatCompletionRequest =
 
 export function useCreateChatCompletion() {
   return useMutation({
-    mutationFn: async (body: CreateChatCompletionRequest) => {
-      const { data } = await api.POST("/v1/chat/completions", { body });
+    mutationFn: async ({
+      body,
+      signal,
+    }: {
+      body: CreateChatCompletionRequest;
+      signal: AbortSignal;
+    }) => {
+      const { data } = await api.POST("/v1/chat/completions", { body, signal });
       if (!data) throw new Error("Empty response");
       return data;
     },

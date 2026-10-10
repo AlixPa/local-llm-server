@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { HttpResponse, http } from "msw";
+import { delay, HttpResponse, http } from "msw";
 import { expect, test } from "vitest";
 import { App } from "@/App";
 import { renderWithProviders } from "./render";
@@ -196,4 +196,25 @@ test("multiple messages with roles are sent as an input list", async () => {
     { role: "user", content: "Hello" },
     { role: "developer", content: "Be terse" },
   ]);
+});
+
+test("cancel aborts a non-streamed request and records it as cancelled", async () => {
+  const user = await renderPlayground();
+  server.use(
+    http.post("*/v1/responses", async () => {
+      await delay("infinite");
+      return HttpResponse.json({});
+    }),
+  );
+
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  const cancel = screen.getByRole("button", { name: "Cancel" });
+  await waitFor(() => expect(cancel).toBeEnabled());
+  await user.click(cancel);
+
+  expect(await screen.findByRole("button", { name: /#1/ })).toHaveTextContent(
+    "cancelled",
+  );
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
 });

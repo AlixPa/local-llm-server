@@ -6,8 +6,14 @@ export type CreateResponse = components["schemas"]["CreateResponse"];
 
 export function useCreateResponse() {
   return useMutation({
-    mutationFn: async (body: CreateResponse) => {
-      const { data } = await api.POST("/v1/responses", { body });
+    mutationFn: async ({
+      body,
+      signal,
+    }: {
+      body: CreateResponse;
+      signal: AbortSignal;
+    }) => {
+      const { data } = await api.POST("/v1/responses", { body, signal });
       if (!data) throw new Error("Empty response");
       return data;
     },
