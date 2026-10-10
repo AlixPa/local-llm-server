@@ -1,19 +1,46 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import {
+  endpointOf,
+  type FilterValues,
+  toUnixSeconds,
+} from "@/components/request-filters";
 
-export type ChatCompletionAnalyticsItem =
-  components["schemas"]["ChatCompletionAnalyticsItem"];
-export type ChatCompletionAnalyticsSummary =
-  components["schemas"]["ChatCompletionAnalyticsSummary"];
+export type AnalyticsRequestItem = components["schemas"]["AnalyticsRequestItem"];
+export type AnalyticsRequestSummary = components["schemas"]["AnalyticsRequestSummary"];
+type RequestStatus = components["schemas"]["RequestStatus"];
 
-export function useChatCompletionAnalytics() {
+export const REQUEST_STATUSES = [
+  "succeeded",
+  "failed",
+  "cancelled",
+] as const satisfies readonly RequestStatus[];
+
+export type AnalyticsFilters = {
+  endpoint?: NonNullable<ReturnType<typeof endpointOf>>;
+  status?: RequestStatus;
+  since?: number;
+  until?: number;
+};
+
+export function toAnalyticsFilters(values: FilterValues): AnalyticsFilters {
+  return {
+    endpoint: endpointOf(values.endpoint),
+    status: REQUEST_STATUSES.find((status) => status === values.status),
+    since: toUnixSeconds(values.since),
+    until: toUnixSeconds(values.until),
+  };
+}
+
+export function useRequestAnalytics(filters: AnalyticsFilters) {
   return useInfiniteQuery({
-    queryKey: ["analytics", "chat-completions"],
+    queryKey: ["analytics", "requests", filters],
     initialPageParam: undefined as string | undefined,
+    placeholderData: keepPreviousData,
     queryFn: async ({ pageParam }) => {
-      const { data } = await api.GET("/v1/analytics/chat-completions", {
-        params: { query: { after: pageParam } },
+      const { data } = await api.GET("/v1/analytics/requests", {
+        params: { query: { ...filters, after: pageParam } },
       });
       if (!data) throw new Error("Empty response");
       return data;
@@ -23,11 +50,14 @@ export function useChatCompletionAnalytics() {
   });
 }
 
-export function useChatCompletionSummary() {
+export function useRequestSummary(filters: AnalyticsFilters) {
   return useQuery({
-    queryKey: ["analytics", "chat-completions", "summary"],
+    queryKey: ["analytics", "requests", "summary", filters],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
-      const { data } = await api.GET("/v1/analytics/chat-completions/summary");
+      const { data } = await api.GET("/v1/analytics/requests/summary", {
+        params: { query: filters },
+      });
       if (!data) throw new Error("Empty response");
       return data;
     },

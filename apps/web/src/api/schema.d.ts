@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Response */
+        post: operations["create_response_v1_responses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/models": {
         parameters: {
             query?: never;
@@ -55,15 +72,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/analytics/chat-completions": {
+    "/v1/analytics/requests": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Chat Completions */
-        get: operations["list_chat_completions_v1_analytics_chat_completions_get"];
+        /** List Requests */
+        get: operations["list_requests_v1_analytics_requests_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -72,15 +89,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/analytics/chat-completions/summary": {
+    "/v1/analytics/requests/summary": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Chat Completions Summary */
-        get: operations["get_chat_completions_summary_v1_analytics_chat_completions_summary_get"];
+        /** Get Requests Summary */
+        get: operations["get_requests_summary_v1_analytics_requests_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -144,6 +161,72 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnalyticsRequestItem */
+        AnalyticsRequestItem: {
+            /** Id */
+            id: string;
+            endpoint: components["schemas"]["Endpoint"];
+            /** Created */
+            created: number;
+            /** Model */
+            model: string;
+            status: components["schemas"]["RequestStatus"];
+            /** Stream */
+            stream: boolean;
+            /** Prompt Tokens */
+            prompt_tokens: number | null;
+            /** Completion Tokens */
+            completion_tokens: number | null;
+            /** Total Tokens */
+            total_tokens: number | null;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Time To First Token Ms */
+            time_to_first_token_ms: number | null;
+            /** Generation Duration Ms */
+            generation_duration_ms: number | null;
+            /** Load Duration Ms */
+            load_duration_ms: number | null;
+            /** Finish Reason */
+            finish_reason: string | null;
+            /** Error Type */
+            error_type: string | null;
+            /** Error Code */
+            error_code: string | null;
+        };
+        /** AnalyticsRequestList */
+        AnalyticsRequestList: {
+            /**
+             * Object
+             * @constant
+             */
+            object: "list";
+            /** Data */
+            data: components["schemas"]["AnalyticsRequestItem"][];
+            /** First Id */
+            first_id: string | null;
+            /** Last Id */
+            last_id: string | null;
+            /** Has More */
+            has_more: boolean;
+        };
+        /** AnalyticsRequestSummary */
+        AnalyticsRequestSummary: {
+            /** Request Count */
+            request_count: number;
+            /** Error Count */
+            error_count: number;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Avg Duration Ms */
+            avg_duration_ms: number | null;
+            /** Avg Time To First Token Ms */
+            avg_time_to_first_token_ms: number | null;
+            /** Avg Generation Duration Ms */
+            avg_generation_duration_ms: number | null;
+        };
         /** AssistantAudioReference */
         AssistantAudioReference: {
             /** Id */
@@ -181,73 +264,6 @@ export interface components {
              */
             type: "allowed_tools";
             allowed_tools: components["schemas"]["ChatCompletionAllowedTools"];
-        };
-        /** ChatCompletionAnalyticsItem */
-        ChatCompletionAnalyticsItem: {
-            /** Id */
-            id: string;
-            /** Created */
-            created: number;
-            /** Model */
-            model: string;
-            status: components["schemas"]["ChatCompletionStatus"];
-            /** Stream */
-            stream: boolean;
-            /** N */
-            n: number;
-            /** Prompt Tokens */
-            prompt_tokens: number | null;
-            /** Completion Tokens */
-            completion_tokens: number | null;
-            /** Total Tokens */
-            total_tokens: number | null;
-            /** Duration Ms */
-            duration_ms: number;
-            /** Time To First Token Ms */
-            time_to_first_token_ms: number | null;
-            /** Generation Duration Ms */
-            generation_duration_ms: number | null;
-            /** Load Duration Ms */
-            load_duration_ms: number | null;
-            /** Finish Reason */
-            finish_reason: string | null;
-            /** Error Type */
-            error_type: string | null;
-            /** Error Code */
-            error_code: string | null;
-        };
-        /** ChatCompletionAnalyticsList */
-        ChatCompletionAnalyticsList: {
-            /**
-             * Object
-             * @constant
-             */
-            object: "list";
-            /** Data */
-            data: components["schemas"]["ChatCompletionAnalyticsItem"][];
-            /** First Id */
-            first_id: string | null;
-            /** Last Id */
-            last_id: string | null;
-            /** Has More */
-            has_more: boolean;
-        };
-        /** ChatCompletionAnalyticsSummary */
-        ChatCompletionAnalyticsSummary: {
-            /** Request Count */
-            request_count: number;
-            /** Error Count */
-            error_count: number;
-            /** Prompt Tokens */
-            prompt_tokens: number;
-            /** Completion Tokens */
-            completion_tokens: number;
-            /** Avg Duration Ms */
-            avg_duration_ms: number | null;
-            /** Avg Time To First Token Ms */
-            avg_time_to_first_token_ms: number | null;
-            /** Avg Generation Duration Ms */
-            avg_generation_duration_ms: number | null;
         };
         /** ChatCompletionFunctionCallOption */
         ChatCompletionFunctionCallOption: {
@@ -475,11 +491,6 @@ export interface components {
             tool_calls?: components["schemas"]["ChatCompletionMessageToolCalls"] | null;
             function_call?: components["schemas"]["FunctionCall"] | null;
         };
-        /**
-         * ChatCompletionStatus
-         * @enum {string}
-         */
-        ChatCompletionStatus: "succeeded" | "failed" | "cancelled";
         /** ChatCompletionStreamOptions */
         ChatCompletionStreamOptions: {
             /** Include Usage */
@@ -532,6 +543,7 @@ export interface components {
             /** Total Tokens */
             total_tokens: number;
         };
+        ContentPart: components["schemas"]["InputTextContent"] | components["schemas"]["OutputTextContent"] | components["schemas"]["InputImageContent"] | components["schemas"]["_Loose"];
         /** CreateChatCompletionRequest */
         CreateChatCompletionRequest: {
             /** Messages */
@@ -629,6 +641,85 @@ export interface components {
             logprobs: components["schemas"]["ChoiceLogprobs"] | null;
             finish_reason: components["schemas"]["FinishReason"];
         };
+        /** CreateResponse */
+        CreateResponse: {
+            /** Metadata */
+            metadata?: {
+                [key: string]: string;
+            } | null;
+            /** Top Logprobs */
+            top_logprobs?: number | null;
+            /** Temperature */
+            temperature?: number | null;
+            /** Top P */
+            top_p?: number | null;
+            /** User */
+            user?: string | null;
+            /** Safety Identifier */
+            safety_identifier?: string | null;
+            /** Prompt Cache Key */
+            prompt_cache_key?: string | null;
+            /** Prompt Cache Retention */
+            prompt_cache_retention?: ("in_memory" | "24h") | null;
+            /** Prompt Cache Options */
+            prompt_cache_options?: {
+                [key: string]: unknown;
+            } | null;
+            /** Previous Response Id */
+            previous_response_id?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Background */
+            background?: boolean | null;
+            /** Max Tool Calls */
+            max_tool_calls?: number | null;
+            text?: components["schemas"]["ResponseTextParam"] | null;
+            /** Tools */
+            tools?: components["schemas"]["Tool"][] | null;
+            tool_choice?: components["schemas"]["ToolChoiceParam"] | null;
+            /** Prompt */
+            prompt?: {
+                [key: string]: unknown;
+            } | null;
+            /** Access Programs */
+            access_programs?: {
+                [key: string]: unknown;
+            } | null;
+            /** Service Tier */
+            service_tier?: string | null;
+            /** Truncation */
+            truncation?: ("auto" | "disabled") | null;
+            reasoning?: components["schemas"]["Reasoning"] | null;
+            input?: components["schemas"]["InputParam"] | null;
+            /** Include */
+            include?: components["schemas"]["IncludeEnum"][] | null;
+            /** Parallel Tool Calls */
+            parallel_tool_calls?: boolean | null;
+            /** Store */
+            store?: boolean | null;
+            /** Instructions */
+            instructions?: string | null;
+            /** Moderation */
+            moderation?: {
+                [key: string]: unknown;
+            } | null;
+            /** Stream */
+            stream?: boolean | null;
+            /** Stream Options */
+            stream_options?: {
+                [key: string]: unknown;
+            } | null;
+            /** Conversation */
+            conversation?: string | {
+                [key: string]: unknown;
+            } | null;
+            /** Context Management */
+            context_management?: {
+                [key: string]: unknown;
+            }[] | null;
+            /** Max Output Tokens */
+            max_output_tokens?: number | null;
+        };
         /** CustomToolChatCompletions */
         CustomToolChatCompletions: {
             /**
@@ -649,6 +740,20 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** EasyInputMessage */
+        EasyInputMessage: {
+            /** Type */
+            type?: "message" | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant" | "system" | "developer";
+            /** Content */
+            content: string | components["schemas"]["ContentPart"][];
+        };
+        /** @enum {string} */
+        Endpoint: "/v1/chat/completions" | "/v1/responses";
         /** FileContent */
         FileContent: {
             /** Filename */
@@ -675,6 +780,23 @@ export interface components {
          * @enum {string}
          */
         FunctionCallMode: "none" | "auto";
+        /** FunctionCallOutputItemParam */
+        FunctionCallOutputItemParam: {
+            /** Id */
+            id?: string | null;
+            /** Call Id */
+            call_id?: string | null;
+            /**
+             * Type
+             * @default function_call_output
+             * @constant
+             */
+            type: "function_call_output";
+            /** Output */
+            output: string | {
+                [key: string]: unknown;
+            }[];
+        };
         /** FunctionObject */
         FunctionObject: {
             /** Name */
@@ -687,6 +809,42 @@ export interface components {
             } | null;
             /** Strict */
             strict?: boolean | null;
+        };
+        /** FunctionTool */
+        FunctionTool: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "function";
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Parameters */
+            parameters?: {
+                [key: string]: unknown;
+            } | null;
+            /** Strict */
+            strict?: boolean | null;
+        };
+        /** FunctionToolCall */
+        FunctionToolCall: {
+            /** Id */
+            id?: string | null;
+            /**
+             * Type
+             * @default function_call
+             * @constant
+             */
+            type: "function_call";
+            /** Call Id */
+            call_id: string;
+            /** Name */
+            name: string;
+            /** Arguments */
+            arguments: string;
+            status?: components["schemas"]["ResponseStatus"] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -712,6 +870,19 @@ export interface components {
             url: string;
             detail?: components["schemas"]["ImageDetail"] | null;
         };
+        /**
+         * IncludeEnum
+         * @enum {string}
+         */
+        IncludeEnum: "file_search_call.results" | "web_search_call.results" | "web_search_call.action.sources" | "message.input_image.image_url" | "computer_call_output.output.image_url" | "code_interpreter_call.outputs" | "reasoning.encrypted_content" | "message.output_text.logprobs";
+        /** IncompleteDetails */
+        IncompleteDetails: {
+            /**
+             * Reason
+             * @constant
+             */
+            reason: "max_output_tokens";
+        };
         /** InputAudio */
         InputAudio: {
             /** Data */
@@ -721,6 +892,58 @@ export interface components {
              * @enum {string}
              */
             format: "wav" | "mp3";
+        };
+        /** InputImageContent */
+        InputImageContent: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "input_image";
+            /** Image Url */
+            image_url?: string | null;
+            /** File Id */
+            file_id?: string | null;
+            /** Detail */
+            detail?: string | null;
+        };
+        InputItem: components["schemas"]["EasyInputMessage"] | components["schemas"]["InputMessage"] | components["schemas"]["OutputMessage"] | components["schemas"]["FunctionToolCall"] | components["schemas"]["FunctionCallOutputItemParam"] | components["schemas"]["ReasoningItem"] | components["schemas"]["_Loose"];
+        /** InputMessage */
+        InputMessage: {
+            /** Type */
+            type?: "message" | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "system" | "developer";
+            status?: components["schemas"]["ResponseStatus"] | null;
+            /** Content */
+            content: components["schemas"]["ContentPart"][];
+        };
+        InputParam: string | components["schemas"]["InputItem"][];
+        /** InputTextContent */
+        InputTextContent: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "input_text";
+            /** Text */
+            text: string;
+        };
+        /** InputTokensDetails */
+        InputTokensDetails: {
+            /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
+            /**
+             * Cache Write Tokens
+             * @default 0
+             */
+            cache_write_tokens: number;
         };
         /** JsonSchemaFormat */
         JsonSchemaFormat: {
@@ -745,6 +968,26 @@ export interface components {
             /** Data */
             data: components["schemas"]["Model"][];
         };
+        /** LogProb */
+        LogProb: {
+            /** Token */
+            token: string;
+            /** Logprob */
+            logprob: number;
+            /** Bytes */
+            bytes: number[];
+            /** Top Logprobs */
+            top_logprobs: components["schemas"]["LogProbTop"][];
+        };
+        /** LogProbTop */
+        LogProbTop: {
+            /** Token */
+            token: string;
+            /** Logprob */
+            logprob: number;
+            /** Bytes */
+            bytes: number[];
+        };
         /** Model */
         Model: {
             /** Id */
@@ -767,6 +1010,57 @@ export interface components {
             policy?: {
                 [key: string]: unknown;
             } | null;
+        };
+        OutputItem: components["schemas"]["OutputMessage"] | components["schemas"]["FunctionToolCall"];
+        /** OutputMessage */
+        OutputMessage: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @default message
+             * @constant
+             */
+            type: "message";
+            /**
+             * Role
+             * @default assistant
+             * @constant
+             */
+            role: "assistant";
+            /** Content */
+            content: components["schemas"]["ContentPart"][];
+            status: components["schemas"]["ResponseStatus"];
+        };
+        /** OutputTextContent */
+        OutputTextContent: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "output_text";
+            /** Text */
+            text: string;
+            /**
+             * Annotations
+             * @default []
+             */
+            annotations: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Logprobs
+             * @default []
+             */
+            logprobs: components["schemas"]["LogProb"][];
+        };
+        /** OutputTokensDetails */
+        OutputTokensDetails: {
+            /**
+             * Reasoning Tokens
+             * @default 0
+             */
+            reasoning_tokens: number;
         };
         /**
          * Participant
@@ -798,11 +1092,123 @@ export interface components {
             /** Mode */
             mode?: ("implicit" | "explicit") | null;
         };
+        /** Reasoning */
+        Reasoning: {
+            /** Mode */
+            mode?: string | null;
+            effort?: components["schemas"]["ReasoningEffort"] | null;
+            /** Summary */
+            summary?: ("auto" | "concise" | "detailed") | null;
+            /** Context */
+            context?: ("auto" | "current_turn" | "all_turns") | null;
+            /** Generate Summary */
+            generate_summary?: ("auto" | "concise" | "detailed") | null;
+        };
         /**
          * ReasoningEffort
          * @enum {string}
          */
         ReasoningEffort: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+        /** ReasoningItem */
+        ReasoningItem: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "reasoning";
+            /**
+             * Summary
+             * @default []
+             */
+            summary: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * RequestStatus
+         * @enum {string}
+         */
+        RequestStatus: "succeeded" | "failed" | "cancelled";
+        /** Response */
+        Response: {
+            /** Id */
+            id: string;
+            /**
+             * Object
+             * @default response
+             * @constant
+             */
+            object: "response";
+            /** Created At */
+            created_at: number;
+            /** Completed At */
+            completed_at: number | null;
+            status: components["schemas"]["ResponseStatus"];
+            /** Model */
+            model: string;
+            /** Output */
+            output: components["schemas"]["OutputItem"][];
+            usage: components["schemas"]["ResponseUsage"] | null;
+            error: components["schemas"]["ResponseError"] | null;
+            incomplete_details: components["schemas"]["IncompleteDetails"] | null;
+            /** Instructions */
+            instructions: string | null;
+            /** Metadata */
+            metadata: {
+                [key: string]: string;
+            };
+            /** Tools */
+            tools: {
+                [key: string]: unknown;
+            }[];
+            /** Tool Choice */
+            tool_choice: string | {
+                [key: string]: unknown;
+            };
+            /** Temperature */
+            temperature: number | null;
+            /** Top P */
+            top_p: number | null;
+            /** Parallel Tool Calls */
+            parallel_tool_calls: boolean;
+            /** Max Output Tokens */
+            max_output_tokens: number | null;
+            /** Text */
+            text: {
+                [key: string]: unknown;
+            };
+            /**
+             * Truncation
+             * @enum {string}
+             */
+            truncation: "auto" | "disabled";
+            /** Reasoning */
+            reasoning: {
+                [key: string]: unknown;
+            } | null;
+            /** Top Logprobs */
+            top_logprobs: number | null;
+            /** Access Programs */
+            access_programs?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Background
+             * @default false
+             */
+            background: boolean;
+            /** Previous Response Id */
+            previous_response_id?: string | null;
+        };
+        /** ResponseError */
+        ResponseError: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
         /** ResponseFormatJsonObject */
         ResponseFormatJsonObject: {
             /**
@@ -834,6 +1240,39 @@ export interface components {
          */
         ResponseModality: "text" | "audio";
         /**
+         * ResponseStatus
+         * @enum {string}
+         */
+        ResponseStatus: "completed" | "incomplete" | "in_progress" | "failed" | "cancelled";
+        /** ResponseTextParam */
+        ResponseTextParam: {
+            format?: components["schemas"]["TextResponseFormatConfiguration"] | null;
+            /** Verbosity */
+            verbosity?: ("low" | "medium" | "high") | null;
+        };
+        /** ResponseUsage */
+        ResponseUsage: {
+            /** Input Tokens */
+            input_tokens: number;
+            /**
+             * @default {
+             *       "cached_tokens": 0,
+             *       "cache_write_tokens": 0
+             *     }
+             */
+            input_tokens_details: components["schemas"]["InputTokensDetails"];
+            /** Output Tokens */
+            output_tokens: number;
+            /**
+             * @default {
+             *       "reasoning_tokens": 0
+             *     }
+             */
+            output_tokens_details: components["schemas"]["OutputTokensDetails"];
+            /** Total Tokens */
+            total_tokens: number;
+        };
+        /**
          * ServiceTier
          * @enum {string}
          */
@@ -849,11 +1288,64 @@ export interface components {
          */
         StepStatus: "in_progress" | "completed" | "failed" | "canceled" | "interrupted";
         TextParts: components["schemas"]["ChatCompletionRequestMessageContentPartText"][];
+        TextResponseFormatConfiguration: components["schemas"]["ResponseFormatText"] | components["schemas"]["ResponseFormatJsonObject"] | components["schemas"]["TextResponseFormatJsonSchema"];
+        /** TextResponseFormatJsonSchema */
+        TextResponseFormatJsonSchema: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "json_schema";
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Schema */
+            schema: {
+                [key: string]: unknown;
+            };
+            /** Strict */
+            strict?: boolean | null;
+        };
+        Tool: components["schemas"]["FunctionTool"] | components["schemas"]["_Loose"];
+        /** ToolChoiceAllowed */
+        ToolChoiceAllowed: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "allowed_tools";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto" | "required";
+            /** Tools */
+            tools: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** ToolChoiceFunction */
+        ToolChoiceFunction: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "function";
+            /** Name */
+            name: string;
+        };
         /**
          * ToolChoiceMode
          * @enum {string}
          */
         ToolChoiceMode: "none" | "auto" | "required";
+        /**
+         * ToolChoiceOptions
+         * @enum {string}
+         */
+        ToolChoiceOptions: "none" | "auto" | "required";
+        ToolChoiceParam: components["schemas"]["ToolChoiceOptions"] | components["schemas"]["ToolChoiceFunction"] | components["schemas"]["ToolChoiceAllowed"] | components["schemas"]["_Loose"];
         /**
          * TraceOutcome
          * @enum {string}
@@ -986,6 +1478,13 @@ export interface components {
             /** Error Message */
             error_message: string | null;
         };
+        /** _Loose */
+        _Loose: {
+            /** Type */
+            type?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
     };
     responses: never;
     parameters: never;
@@ -1048,6 +1547,39 @@ export interface operations {
             };
         };
     };
+    create_response_v1_responses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateResponse"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Response"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_models_v1_models_get: {
         parameters: {
             query?: never;
@@ -1068,11 +1600,15 @@ export interface operations {
             };
         };
     };
-    list_chat_completions_v1_analytics_chat_completions_get: {
+    list_requests_v1_analytics_requests_get: {
         parameters: {
             query?: {
                 limit?: number;
                 after?: string | null;
+                endpoint?: components["schemas"]["Endpoint"] | null;
+                status?: components["schemas"]["RequestStatus"] | null;
+                since?: number | null;
+                until?: number | null;
             };
             header?: never;
             path?: never;
@@ -1086,7 +1622,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatCompletionAnalyticsList"];
+                    "application/json": components["schemas"]["AnalyticsRequestList"];
                 };
             };
             /** @description Validation Error */
@@ -1100,9 +1636,14 @@ export interface operations {
             };
         };
     };
-    get_chat_completions_summary_v1_analytics_chat_completions_summary_get: {
+    get_requests_summary_v1_analytics_requests_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                endpoint?: components["schemas"]["Endpoint"] | null;
+                status?: components["schemas"]["RequestStatus"] | null;
+                since?: number | null;
+                until?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1115,7 +1656,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatCompletionAnalyticsSummary"];
+                    "application/json": components["schemas"]["AnalyticsRequestSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

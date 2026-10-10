@@ -13,9 +13,16 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
-type Kind = "number" | "integer" | "text" | "json" | "jsonOrText" | "boolean" | "enum";
+export type Kind =
+  | "number"
+  | "integer"
+  | "text"
+  | "json"
+  | "jsonOrText"
+  | "boolean"
+  | "enum";
 
-type OptionField = {
+export type OptionField = {
   key: string;
   kind: Kind;
   placeholder?: string;
@@ -113,22 +120,31 @@ function parseField(field: OptionField, raw: string): { value: unknown } | null 
 }
 
 // Only touched (non-empty) options are included, so the server's own defaults apply
-export function buildRequestBody(
-  model: string,
-  messages: readonly PlaygroundMessage[],
+export function collectOptions(
+  fields: readonly OptionField[],
   values: OptionValues,
-): BuildResult {
+): { extras: Record<string, unknown> } | { error: string } {
   const extras: Record<string, unknown> = {};
-  for (const field of FIELDS) {
+  for (const field of fields) {
     const raw = values[field.key];
     if (raw === undefined || raw === "") continue;
     const parsed = parseField(field, raw);
     if (parsed === null) return { error: `Invalid value for ${field.key}` };
     extras[field.key] = parsed.value;
   }
+  return { extras };
+}
+
+export function buildRequestBody(
+  model: string,
+  messages: readonly PlaygroundMessage[],
+  values: OptionValues,
+): BuildResult {
+  const collected = collectOptions(FIELDS, values);
+  if ("error" in collected) return collected;
   return {
     body: {
-      ...extras,
+      ...collected.extras,
       messages: messages.map(({ role, content }) => ({ role, content })),
       model,
     },
@@ -143,13 +159,16 @@ type Props = {
   onValuesChange: (values: OptionValues) => void;
 };
 
-export function PlaygroundOptions({
+type ControlsProps = Props & { fields: readonly OptionField[] };
+
+export function OptionControls({
+  fields,
   models,
   model,
   onModelChange,
   values,
   onValuesChange,
-}: Props) {
+}: ControlsProps) {
   const set = (key: string, value: string) =>
     onValuesChange({ ...values, [key]: value });
 
@@ -175,7 +194,7 @@ export function PlaygroundOptions({
           </SelectContent>
         </Select>
       </div>
-      {FIELDS.map((field) => {
+      {fields.map((field) => {
         const id = `option-${field.key}`;
         const value = values[field.key];
         return (
@@ -233,4 +252,8 @@ export function PlaygroundOptions({
       </Button>
     </div>
   );
+}
+
+export function PlaygroundOptions(props: Props) {
+  return <OptionControls fields={FIELDS} {...props} />;
 }

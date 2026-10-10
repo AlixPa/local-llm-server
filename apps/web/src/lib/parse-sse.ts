@@ -1,22 +1,31 @@
 import { ApiError } from "@/api/client";
 
-function errorMessage(payload: unknown): string | null {
-  if (typeof payload !== "object" || payload === null || !("error" in payload)) {
-    return null;
+function messageOf(value: unknown): string | null {
+  if (typeof value === "object" && value !== null && "message" in value) {
+    if (typeof value.message === "string") return value.message;
   }
-  const { error } = payload;
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-  return "Stream failed";
+  return null;
 }
 
-// Yields each JSON `data:` payload until the [DONE] sentinel. The payload is
+// Covers chat `{error: {...}}`, Responses `type: "error"` and `response.failed`
+function errorMessage(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  if ("error" in payload) return messageOf(payload.error) ?? "Stream failed";
+  if (!("type" in payload)) return null;
+  if (payload.type === "error") return messageOf(payload) ?? "Stream failed";
+  if (payload.type === "response.failed") {
+    const response = "response" in payload ? payload.response : null;
+    const error =
+      typeof response === "object" && response !== null && "error" in response
+        ? response.error
+        : null;
+    return messageOf(error) ?? "Stream failed";
+  }
+  return null;
+}
+
+// Yields each JSON `data:` payload until [DONE] or the end of the stream
+// (`event:` lines are ignored). The payload is
 // `unknown` because streamed chunks are not described by the generated schema.
 export async function* parseSse(
   stream: ReadableStream<Uint8Array>,

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { type CreateChatCompletionRequest, useCreateChatCompletion } from "@/api/chat";
 import { useModels } from "@/api/models";
 import { type HistoryEntry, PlaygroundHistory } from "@/components/playground-history";
 import {
+  CHAT_ROLES,
   newMessage,
   type PlaygroundMessage,
   PlaygroundMessages,
@@ -16,17 +17,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useChatStream } from "@/hooks/use-chat-stream";
 
+function previewOf(request: CreateChatCompletionRequest): string {
+  const last = request.messages.at(-1);
+  return last && typeof last.content === "string" ? last.content : "(no text)";
+}
+
 type Result = { answer: string; error: string | null };
 
-export function PlaygroundPage() {
+export function PlaygroundChatPage() {
   const models = useModels();
   const completion = useCreateChatCompletion();
   const stream = useChatStream();
-  const [messages, setMessages] = useState<PlaygroundMessage[]>(() => [newMessage()]);
+  const [messages, setMessages] = useState<PlaygroundMessage[]>(() => [
+    newMessage("user"),
+  ]);
   const [chosenModel, setChosenModel] = useState<string | undefined>();
   const [values, setValues] = useState<OptionValues>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -42,7 +51,14 @@ export function PlaygroundPage() {
   ) => {
     setHistory((entries) => [
       ...entries,
-      { id: crypto.randomUUID(), request, status, answer, error },
+      {
+        id: crypto.randomUUID(),
+        request,
+        preview: previewOf(request),
+        status,
+        answer,
+        error,
+      },
     ]);
     setResult({ answer, error });
   };
@@ -67,13 +83,22 @@ export function PlaygroundPage() {
       );
       return;
     }
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const response = await completion.mutateAsync(body);
+      const response = await completion.mutateAsync({
+        body,
+        signal: controller.signal,
+      });
       const answer = response.choices
         .map((choice) => choice.message.content ?? JSON.stringify(choice.message))
         .join("\n\n");
       record(body, "completed", answer, null);
     } catch (caught) {
+      if (controller.signal.aborted) {
+        record(body, "cancelled", "", null);
+        return;
+      }
       record(
         body,
         "failed",
@@ -83,17 +108,27 @@ export function PlaygroundPage() {
     }
   };
 
+  const cancel = () => {
+    abortRef.current?.abort();
+    stream.cancel();
+  };
+
   const shown = stream.isStreaming ? { answer: stream.text, error: null } : result;
 
   return (
-    <div className="grid gap-4 p-4 lg:grid-cols-[1fr_20rem]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex flex-col gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Conversation</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <PlaygroundMessages messages={messages} onChange={setMessages} />
+            <PlaygroundMessages
+              messages={messages}
+              onChange={setMessages}
+              roles={CHAT_ROLES}
+              defaultRole="user"
+            />
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -102,12 +137,7 @@ export function PlaygroundPage() {
               >
                 Send
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={stream.cancel}
-                disabled={!stream.isStreaming}
-              >
+              <Button type="button" variant="outline" onClick={cancel} disabled={!busy}>
                 Cancel
               </Button>
             </div>

@@ -1,6 +1,17 @@
-import { useChatCompletionAnalytics, useChatCompletionSummary } from "@/api/analytics";
+import { useMemo, useState } from "react";
+import {
+  REQUEST_STATUSES,
+  toAnalyticsFilters,
+  useRequestAnalytics,
+  useRequestSummary,
+} from "@/api/analytics";
 import { AnalyticsSummary } from "@/components/analytics-summary";
 import { AnalyticsTable } from "@/components/analytics-table";
+import {
+  EMPTY_FILTERS,
+  type FilterValues,
+  RequestFilters,
+} from "@/components/request-filters";
 
 function Message({ children, error }: { children: string; error?: boolean }) {
   return (
@@ -11,13 +22,21 @@ function Message({ children, error }: { children: string; error?: boolean }) {
 }
 
 export function AnalyticsPage() {
-  const summary = useChatCompletionSummary();
-  const list = useChatCompletionAnalytics();
+  const [filterValues, setFilterValues] = useState<FilterValues>(EMPTY_FILTERS);
+  const filters = useMemo(() => toAnalyticsFilters(filterValues), [filterValues]);
+  const summary = useRequestSummary(filters);
+  const list = useRequestAnalytics(filters);
   const items = list.data?.pages.flatMap((page) => page.data) ?? [];
+  const filtersActive = Object.values(filters).some((v) => v !== undefined);
 
   return (
     <main className="flex flex-col gap-6 p-6">
       <h1 className="font-semibold text-xl">Analytics</h1>
+      <RequestFilters
+        values={filterValues}
+        onChange={setFilterValues}
+        statusOptions={REQUEST_STATUSES}
+      />
       {summary.isError && <Message error>{summary.error.message}</Message>}
       {summary.data && <AnalyticsSummary summary={summary.data} />}
       {list.isError && <Message error>{list.error.message}</Message>}
@@ -25,6 +44,8 @@ export function AnalyticsPage() {
       {list.data && (
         <AnalyticsTable
           items={items}
+          filtersActive={filtersActive}
+          onClearFilters={() => setFilterValues(EMPTY_FILTERS)}
           hasMore={list.hasNextPage}
           isLoadingMore={list.isFetchingNextPage}
           onLoadMore={() => list.fetchNextPage()}

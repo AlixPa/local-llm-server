@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { type FilterValues, toUnixSeconds } from "@/components/request-filters";
 
 export type TracedRequestItem = components["schemas"]["TracedRequestItem"];
 export type TracedRequestDetail = components["schemas"]["TracedRequestDetail"];
@@ -9,12 +10,30 @@ export type StepKind = components["schemas"]["StepKind"];
 export type Participant = components["schemas"]["Participant"];
 export type TraceOutcome = components["schemas"]["TraceOutcome"];
 
+export const TRACE_OUTCOMES = [
+  "in_progress",
+  "success",
+  "error",
+  "canceled",
+  "interrupted",
+] as const satisfies readonly TraceOutcome[];
+
 export type RequestFilters = {
   endpoint?: string;
   outcome?: TraceOutcome[];
   since?: number;
   until?: number;
 };
+
+export function toRequestFilters(values: FilterValues): RequestFilters {
+  const outcome = TRACE_OUTCOMES.find((candidate) => candidate === values.status);
+  return {
+    endpoint: values.endpoint || undefined,
+    outcome: outcome ? [outcome] : undefined,
+    since: toUnixSeconds(values.since),
+    until: toUnixSeconds(values.until),
+  };
+}
 
 export const OBSERVABILITY_KEY = ["observability"] as const;
 

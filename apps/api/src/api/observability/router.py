@@ -7,7 +7,7 @@ import anyio
 from db.engine import get_session
 from db.models import TraceOutcome
 from db.repositories import tracing as repo
-from db.repositories.chat_completions import UnknownCursorError
+from db.repositories.analytics import UnknownCursorError
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette import EventSourceResponse, ServerSentEvent

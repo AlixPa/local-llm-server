@@ -60,7 +60,8 @@ class TracedRequest(Base):
     http_status: Mapped[int | None]
     outcome: Mapped[TraceOutcome] = mapped_column(_string_enum(TraceOutcome))
     summary: Mapped[str | None]
-    # Value link to chat_completion_records.external_id; no FK because the usage
+    # Value link to chat_completion_records.external_id or
+    # response_records.external_id; no FK because the usage
     # record is inserted after the trace row exists (and not at all on rejection)
     response_id: Mapped[str | None]
     error_message: Mapped[str | None]

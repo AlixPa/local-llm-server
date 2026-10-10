@@ -1,25 +1,21 @@
 from datetime import datetime
-from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import JSON, Enum, ForeignKey, Index, desc
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.models.base import Base
+from db.models.status import RequestStatus
 from db.types import UtcDateTime
-
-
-class ChatCompletionStatus(StrEnum):
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
 
 
 class ChatCompletionRecord(Base):
     __tablename__ = "chat_completion_records"
     __table_args__ = (
         Index(
-            "ix_chat_completion_records_created_at_id", desc("created_at"), desc("id")
+            "ix_chat_completion_records_created_at_external_id",
+            desc("created_at"),
+            desc("external_id"),
         ),
     )
 
@@ -27,9 +23,9 @@ class ChatCompletionRecord(Base):
     external_id: Mapped[str] = mapped_column(unique=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     model: Mapped[str]
-    status: Mapped[ChatCompletionStatus] = mapped_column(
+    status: Mapped[RequestStatus] = mapped_column(
         Enum(
-            ChatCompletionStatus,
+            RequestStatus,
             native_enum=False,
             create_constraint=False,
             length=16,

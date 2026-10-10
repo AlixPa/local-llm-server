@@ -1,19 +1,19 @@
 from typing import Literal
 
-from db.models import ChatCompletionRecord, ChatCompletionStatus
-from db.repositories.chat_completions import ChatCompletionSummary
+from db.models import RequestStatus
+from db.repositories.analytics import Endpoint, RequestMetadata, RequestSummary
 from pydantic import BaseModel, ConfigDict
 
 
-class ChatCompletionAnalyticsItem(BaseModel):
+class AnalyticsRequestItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     id: str
+    endpoint: Endpoint
     created: int
     model: str
-    status: ChatCompletionStatus
+    status: RequestStatus
     stream: bool
-    n: int
     prompt_tokens: int | None
     completion_tokens: int | None
     total_tokens: int | None
@@ -26,7 +26,7 @@ class ChatCompletionAnalyticsItem(BaseModel):
     error_code: str | None
 
     @classmethod
-    def from_record(cls, record: ChatCompletionRecord) -> ChatCompletionAnalyticsItem:
+    def from_metadata(cls, record: RequestMetadata) -> AnalyticsRequestItem:
         known = [
             tokens
             for tokens in (record.prompt_tokens, record.completion_tokens)
@@ -34,11 +34,11 @@ class ChatCompletionAnalyticsItem(BaseModel):
         ]
         return cls(
             id=record.external_id,
+            endpoint=record.endpoint,
             created=int(record.created_at.timestamp()),
             model=record.model,
             status=record.status,
             stream=record.stream,
-            n=record.n,
             prompt_tokens=record.prompt_tokens,
             completion_tokens=record.completion_tokens,
             total_tokens=sum(known) if known else None,
@@ -52,17 +52,17 @@ class ChatCompletionAnalyticsItem(BaseModel):
         )
 
 
-class ChatCompletionAnalyticsList(BaseModel):
+class AnalyticsRequestList(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     object: Literal["list"]
-    data: list[ChatCompletionAnalyticsItem]
+    data: list[AnalyticsRequestItem]
     first_id: str | None
     last_id: str | None
     has_more: bool
 
 
-class ChatCompletionAnalyticsSummary(BaseModel):
+class AnalyticsRequestSummary(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     request_count: int
@@ -74,7 +74,5 @@ class ChatCompletionAnalyticsSummary(BaseModel):
     avg_generation_duration_ms: float | None
 
     @classmethod
-    def from_summary(
-        cls, summary: ChatCompletionSummary
-    ) -> ChatCompletionAnalyticsSummary:
+    def from_summary(cls, summary: RequestSummary) -> AnalyticsRequestSummary:
         return cls(**vars(summary))

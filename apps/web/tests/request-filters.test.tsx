@@ -51,8 +51,10 @@ test("changing filters issues requests with the matching query params", async ()
 
   await user.selectOptions(screen.getByLabelText("Endpoint"), "/v1/chat/completions");
   await waitFor(() => expect(lastQuery().get("endpoint")).toBe("/v1/chat/completions"));
+  await user.selectOptions(screen.getByLabelText("Endpoint"), "/v1/responses");
+  await waitFor(() => expect(lastQuery().get("endpoint")).toBe("/v1/responses"));
 
-  await user.click(screen.getByLabelText("Errors only"));
+  await user.selectOptions(screen.getByLabelText("Status"), "error");
   await waitFor(() => expect(lastQuery().getAll("outcome")).toEqual(["error"]));
 
   await user.type(screen.getByLabelText("Since"), "2026-01-01T00:00");
@@ -105,7 +107,7 @@ test("changing filters while paused resets the pending count", async () => {
   act(() => source().emit("request.created", '{"id": 1}'));
   expect(await screen.findByText("1 new request waiting")).toBeInTheDocument();
 
-  await user.click(screen.getByLabelText("Errors only"));
+  await user.selectOptions(screen.getByLabelText("Status"), "error");
   await waitFor(() => expect(screen.queryByText(/waiting/)).not.toBeInTheDocument());
 });
 
@@ -114,9 +116,9 @@ test("clearing a filter drops its query param", async () => {
   renderWithProviders(<App />, "/observability");
   await waitFor(() => expect(queries).toHaveLength(1));
 
-  await user.click(screen.getByLabelText("Errors only"));
+  await user.selectOptions(screen.getByLabelText("Status"), "error");
   await waitFor(() => expect(lastQuery().getAll("outcome")).toEqual(["error"]));
-  await user.click(screen.getByLabelText("Errors only"));
+  await user.click(screen.getByRole("button", { name: "Clear filters" }));
   await waitFor(() => expect(lastQuery().has("outcome")).toBe(false));
 });
 
@@ -125,7 +127,7 @@ test("an empty result says no requests match when filters are active", async () 
   renderWithProviders(<App />, "/observability");
   expect(await screen.findByText(/No requests recorded yet/)).toBeInTheDocument();
 
-  await user.click(screen.getByLabelText("Errors only"));
+  await user.selectOptions(screen.getByLabelText("Status"), "error");
   expect(await screen.findByText(/No requests match/)).toBeInTheDocument();
   expect(screen.queryByText(/No requests recorded yet/)).not.toBeInTheDocument();
 });

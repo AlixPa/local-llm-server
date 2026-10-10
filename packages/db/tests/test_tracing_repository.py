@@ -9,7 +9,7 @@ from db.models import (
     TraceOutcome,
     WorkflowStep,
 )
-from db.repositories.chat_completions import UnknownCursorError
+from db.repositories.analytics import UnknownCursorError
 from db.repositories.tracing import (
     NewStep,
     RequestFilters,

@@ -73,4 +73,29 @@ describe("parseSse", () => {
     }
     expect(payloads).toEqual([{ a: 1 }]);
   });
+
+  test("parses event-framed streams that end without [DONE]", async () => {
+    const payloads = await collect(
+      streamOf([
+        'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"Hi"}\n\n',
+        'event: response.completed\ndata: {"type":"response.completed"}\n\n',
+      ]),
+    );
+    expect(payloads).toEqual([
+      { type: "response.output_text.delta", delta: "Hi" },
+      { type: "response.completed" },
+    ]);
+  });
+
+  test("throws the server message of a response.failed event", async () => {
+    const stream = streamOf([
+      'event: response.failed\ndata: {"type":"response.failed","response":{"status":"failed","error":{"code":"server_error","message":"ollama died"}}}\n\n',
+    ]);
+    await expect(collect(stream)).rejects.toThrow("ollama died");
+  });
+
+  test("throws the message of a type error event", async () => {
+    const stream = streamOf(['data: {"type":"error","message":"bad"}\n\n']);
+    await expect(collect(stream)).rejects.toThrow("bad");
+  });
 });

@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 from api.errors import ErrorResponse
-from db.models import ChatCompletionContent, ChatCompletionRecord, ChatCompletionStatus
+from db.models import ChatCompletionContent, ChatCompletionRecord, RequestStatus
 from fastapi import FastAPI
 from httpx import AsyncClient, Request, Response
 from ollama_fakes import OllamaMock, hanging_stream, ndjson, stream_lines
@@ -80,7 +80,7 @@ async def test_stream_wire_format_and_record(
     assert {chunk["id"] for chunk in chunks} == {chunks[0]["id"]}
     [record] = await _records(session)
     assert record.external_id == chunks[0]["id"]
-    assert record.status == ChatCompletionStatus.SUCCEEDED
+    assert record.status == RequestStatus.SUCCEEDED
     assert record.stream is True
     assert record.time_to_first_token_ms is not None
     assert (record.prompt_tokens, record.completion_tokens) == (5, 3)
@@ -190,7 +190,7 @@ async def test_mid_stream_error_becomes_error_event(
     assert error["error"]["type"] == "server_error"
     assert "model crashed" in error["error"]["message"]
     [record] = await _records(session)
-    assert record.status == ChatCompletionStatus.FAILED
+    assert record.status == RequestStatus.FAILED
     content = (
         await session.execute(
             select(ChatCompletionContent).where(
@@ -212,7 +212,7 @@ async def test_stream_ending_without_done_is_a_failure(
     assert events[-1] == "[DONE]"
     assert json.loads(events[-2])["error"]["type"] == "server_error"
     [record] = await _records(session)
-    assert record.status == ChatCompletionStatus.FAILED
+    assert record.status == RequestStatus.FAILED
 
 
 async def test_unexpected_upstream_error_is_recorded(
@@ -228,7 +228,7 @@ async def test_unexpected_upstream_error_is_recorded(
 
     assert response.status_code == 500
     [record] = await _records(session)
-    assert record.status == ChatCompletionStatus.FAILED
+    assert record.status == RequestStatus.FAILED
 
 
 async def test_context_overflow_is_an_error_event(
@@ -243,7 +243,7 @@ async def test_context_overflow_is_an_error_event(
     assert events[-1] == "[DONE]"
     assert json.loads(events[-2])["error"]["code"] == "context_length_exceeded"
     [record] = await _records(session)
-    assert record.status == ChatCompletionStatus.FAILED
+    assert record.status == RequestStatus.FAILED
     assert record.error_code == "context_length_exceeded"
 
 
@@ -271,7 +271,7 @@ async def test_pre_stream_failures_are_real_http_errors(
         ErrorResponse.model_validate(response.json())
     records = await _records(session)
     assert len(records) == len(cases)
-    assert {r.status for r in records} == {ChatCompletionStatus.FAILED}
+    assert {r.status for r in records} == {RequestStatus.FAILED}
 
 
 async def _asgi_post(
@@ -330,7 +330,7 @@ async def test_stream_client_disconnect_cancels_upstream_and_records(
     await asyncio.wait_for(task, 1)
 
     record = await _wait_for_record(session)
-    assert record.status == ChatCompletionStatus.CANCELLED
+    assert record.status == RequestStatus.CANCELLED
     assert closed == [True]
     content = (
         await session.execute(
@@ -367,4 +367,4 @@ async def test_non_stream_disconnect_cancels_every_upstream_call(
 
     assert cancelled == [True, True, True]
     [record] = await _records(session)
-    assert record.status == ChatCompletionStatus.CANCELLED
+    assert record.status == RequestStatus.CANCELLED

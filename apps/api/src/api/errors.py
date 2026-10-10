@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
 
-OPENAI_PATHS = frozenset({"/v1/chat/completions"})
+OPENAI_PATHS = frozenset({"/v1/chat/completions", "/v1/responses"})
 
 
 class ApiError(Exception):

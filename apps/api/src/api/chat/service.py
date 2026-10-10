@@ -3,22 +3,19 @@ import json
 import logging
 import secrets
 import time
-from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import aclosing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import StrEnum
 from typing import Any
 
 import anyio
-from db.models import ChatCompletionStatus, StepStatus, TraceOutcome
+from db.models import RequestStatus, StepStatus, TraceOutcome
 from db.repositories import chat_completions as chat_completions_repo
 from db.repositories import models as models_repo
 from llm.client import (
     OllamaClient,
-    OllamaModelNotFoundError,
     OllamaServerError,
-    OllamaUnreachableError,
 )
 from llm.schemas import (
     OllamaChatChunk,
@@ -66,23 +63,34 @@ from api.chat.schemas import (
     CustomToolChatCompletions,
     FinishReason,
     FunctionCallMode,
-    ReasoningEffort,
     ResponseFormatJsonObject,
     ResponseFormatJsonSchema,
     ResponseModality,
     ToolChoiceMode,
 )
 from api.errors import ApiError, Error
+from api.inference import (
+    OLLAMA_ERRORS,
+    THINK_LEVELS,
+    ClientDisconnectedError,
+    Policy,
+    ToolChoice,
+    Totals,
+    apply_tool_choice,
+    close_open_steps,
+    context_exceeded,
+    internal_error,
+    model_not_found,
+    ms,
+    overflowed,
+    race,
+    record_shielded,
+    to_api_error,
+    unsupported,
+)
 from api.observability.tracing import Trace, get_trace
 
 logger = logging.getLogger(__name__)
-
-
-class Policy(StrEnum):
-    HONOR = "honor"
-    EMULATE = "emulate"
-    IGNORE = "ignore"
-    REJECT = "reject"
 
 
 # Every CreateChatCompletionRequest property must appear here (research.md R5)
@@ -126,99 +134,15 @@ FIELD_POLICY: dict[str, Policy] = {
     "prompt_cache_options": Policy.IGNORE,
 }
 
-THINK_LEVELS: dict[ReasoningEffort, bool | str] = {
-    ReasoningEffort.NONE: False,
-    ReasoningEffort.MINIMAL: False,
-    ReasoningEffort.LOW: "low",
-    ReasoningEffort.MEDIUM: "medium",
-    ReasoningEffort.HIGH: "high",
-    ReasoningEffort.XHIGH: "high",
-    ReasoningEffort.MAX: "high",
-}
-
 type StreamEvent = CreateChatCompletionStreamResponse | ChatCompletionStreamError
 
-_OLLAMA_ERRORS = (OllamaUnreachableError, OllamaServerError, OllamaModelNotFoundError)
 
-
-class _ClientDisconnectedError(Exception):
-    pass
-
-
-def _unsupported(param: str, detail: str = "") -> ApiError:
-    message = f"Unsupported parameter: '{param}'."
-    if detail:
-        message = f"{message} {detail}"
-    return ApiError(
-        400, "invalid_request_error", "unsupported_parameter", param, message
+def _usage(totals: Totals) -> CompletionUsage:
+    return CompletionUsage(
+        prompt_tokens=totals.prompt_tokens,
+        completion_tokens=totals.completion_tokens,
+        total_tokens=totals.prompt_tokens + totals.completion_tokens,
     )
-
-
-def _model_not_found(model: str) -> ApiError:
-    return ApiError(
-        404,
-        "invalid_request_error",
-        "model_not_found",
-        None,
-        f"The model `{model}` does not exist or you do not have access to it.",
-    )
-
-
-def _context_exceeded(num_ctx: int) -> ApiError:
-    return ApiError(
-        400,
-        "invalid_request_error",
-        "context_length_exceeded",
-        "messages",
-        f"This model's maximum context length is {num_ctx} tokens. However, your "
-        "messages resulted in more tokens. Please reduce the length of the messages.",
-    )
-
-
-def _to_api_error(exc: Exception, model: str) -> ApiError:
-    if isinstance(exc, OllamaModelNotFoundError):
-        return _model_not_found(model)
-    if isinstance(exc, OllamaUnreachableError):
-        return ApiError(
-            503, "server_error", None, None, f"Ollama is unreachable: {exc}"
-        )
-    return ApiError(500, "server_error", None, None, f"Ollama error: {exc}")
-
-
-# Ollama truncates an oversized prompt silently and then reports this exact count
-def _overflowed(chunk: OllamaChatChunk, num_ctx: int) -> bool:
-    return chunk.prompt_eval_count == num_ctx // 2 + 2
-
-
-def _internal_error() -> ApiError:
-    return ApiError(500, "server_error", None, None, "Internal server error")
-
-
-def _ms(nanoseconds: int | None) -> int | None:
-    return None if nanoseconds is None else round(nanoseconds / 1_000_000)
-
-
-@dataclass
-class _Totals:
-    calls: int = 0
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    generation_ns: int = 0
-    load_ns: int = 0
-
-    def add(self, chunk: OllamaChatChunk) -> None:
-        self.calls += 1
-        self.prompt_tokens += chunk.prompt_eval_count or 0
-        self.completion_tokens += chunk.eval_count or 0
-        self.generation_ns += chunk.eval_duration or 0
-        self.load_ns += chunk.load_duration or 0
-
-    def usage(self) -> CompletionUsage:
-        return CompletionUsage(
-            prompt_tokens=self.prompt_tokens,
-            completion_tokens=self.completion_tokens,
-            total_tokens=self.prompt_tokens + self.completion_tokens,
-        )
 
 
 @dataclass
@@ -230,7 +154,7 @@ class _Run:
     )
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started: float = field(default_factory=time.monotonic)
-    totals: _Totals = field(default_factory=_Totals)
+    totals: Totals = field(default_factory=Totals)
     time_to_first_token_ms: int | None = None
     finish_reasons: dict[int, FinishReason] = field(
         default_factory=dict[int, FinishReason]
@@ -267,14 +191,14 @@ class _Run:
             created=int(self.created_at.timestamp()),
             model=self.request.model,
             choices=choices,
-            usage=self.totals.usage(),
+            usage=_usage(self.totals),
         ).model_dump(mode="json", exclude_unset=True)
 
 
 async def _record(
     session: AsyncSession,
     run: _Run,
-    status: ChatCompletionStatus,
+    status: RequestStatus,
     *,
     response: dict[str, Any] | None,
     error: ApiError | None = None,
@@ -292,8 +216,8 @@ async def _record(
         completion_tokens=run.totals.completion_tokens if called else None,
         duration_ms=run.elapsed_ms(),
         time_to_first_token_ms=run.time_to_first_token_ms,
-        generation_duration_ms=_ms(run.totals.generation_ns) if called else None,
-        load_duration_ms=_ms(run.totals.load_ns) if called else None,
+        generation_duration_ms=ms(run.totals.generation_ns) if called else None,
+        load_duration_ms=ms(run.totals.load_ns) if called else None,
         finish_reason=run.finish_reasons.get(0),
         error_type=error.type if error else None,
         error_code=error.code if error else None,
@@ -306,34 +230,20 @@ async def _record(
 async def _record_shielded(
     session: AsyncSession,
     run: _Run,
-    status: ChatCompletionStatus,
+    status: RequestStatus,
     *,
     response: dict[str, Any] | None,
     error: ApiError | None = None,
 ) -> None:
-    # A cancelled request must still be persisted. The scope shield (unlike
-    # asyncio.shield) survives the repeated cancellation anyio delivers on
-    # client disconnect, so the session isn't closed under the insert.
-    with anyio.CancelScope(shield=True):
-        await _record(session, run, status, response=response, error=error)
+    await record_shielded(
+        lambda: _record(session, run, status, response=response, error=error)
+    )
 
 
 def _begin_trace(trace: Trace, run: _Run) -> None:
     mode = "stream" if run.stream else "non-stream"
     trace.set_summary(f"{run.request.model} · {mode}")
     trace.set_response_id(run.external_id)
-
-
-def _close_open_steps(
-    trace: Trace,
-    status: StepStatus,
-    message: str | None = None,
-    content: Any = None,
-) -> None:
-    while trace.has_open_step:
-        trace.step_received(content, status, message)
-    if status is StepStatus.CANCELED:
-        trace.set_outcome(TraceOutcome.CANCELED)
 
 
 def _text(content: str | list[ChatCompletionRequestMessageContentPartText]) -> str:
@@ -345,7 +255,7 @@ def _text(content: str | list[ChatCompletionRequestMessageContentPartText]) -> s
 def _image_payload(url: str) -> str:
     header, _, payload = url.partition(",")
     if not (header.startswith("data:") and header.endswith(";base64")):
-        raise _unsupported(
+        raise unsupported(
             "messages", "Only base64 data: URLs are supported for images."
         )
     return payload
@@ -382,11 +292,11 @@ def _translate_messages(request: CreateChatCompletionRequest) -> list[OllamaMess
                         case ChatCompletionRequestMessageContentPartImage():
                             images.append(_image_payload(part.image_url.url))
                         case ChatCompletionRequestMessageContentPartAudio():
-                            raise _unsupported(
+                            raise unsupported(
                                 "messages", "input_audio is not supported."
                             )
                         case ChatCompletionRequestMessageContentPartFile():
-                            raise _unsupported(
+                            raise unsupported(
                                 "messages", "file parts are not supported."
                             )
                 out.append(
@@ -408,7 +318,7 @@ def _translate_messages(request: CreateChatCompletionRequest) -> list[OllamaMess
                             )
                         )
                     else:
-                        raise _unsupported(
+                        raise unsupported(
                             "messages", "custom tool calls are not supported."
                         )
                 if message.function_call:
@@ -457,19 +367,19 @@ def _translate_messages(request: CreateChatCompletionRequest) -> list[OllamaMess
 
 def _reject_unsupported(request: CreateChatCompletionRequest) -> None:
     if request.logit_bias:
-        raise _unsupported("logit_bias")
+        raise unsupported("logit_bias")
     if request.audio is not None:
-        raise _unsupported("audio")
+        raise unsupported("audio")
     if request.web_search_options is not None:
-        raise _unsupported("web_search_options")
+        raise unsupported("web_search_options")
     if request.moderation is not None:
-        raise _unsupported("moderation")
+        raise unsupported("moderation")
     if request.modalities and ResponseModality.AUDIO in request.modalities:
-        raise _unsupported("modalities", "Audio output is not supported.")
+        raise unsupported("modalities", "Audio output is not supported.")
     if any(isinstance(tool, CustomToolChatCompletions) for tool in request.tools or []):
-        raise _unsupported("tools", "Custom tools are not supported.")
+        raise unsupported("tools", "Custom tools are not supported.")
     if isinstance(request.tool_choice, ChatCompletionNamedToolChoiceCustom):
-        raise _unsupported("tool_choice", "Custom tools are not supported.")
+        raise unsupported("tool_choice", "Custom tools are not supported.")
 
 
 def _tools(request: CreateChatCompletionRequest) -> list[dict[str, Any]]:
@@ -491,25 +401,6 @@ def _tools(request: CreateChatCompletionRequest) -> list[dict[str, Any]]:
     return tools
 
 
-def _tool_name(tool: dict[str, Any]) -> str:
-    return str(tool["function"]["name"])
-
-
-def _restrict(
-    tools: list[dict[str, Any]], names: set[str], param: str
-) -> list[dict[str, Any]]:
-    kept = [tool for tool in tools if _tool_name(tool) in names]
-    if not kept:
-        raise ApiError(
-            400,
-            "invalid_request_error",
-            "invalid_value",
-            param,
-            f"Invalid {param}: none of the requested functions are in the tools.",
-        )
-    return kept
-
-
 def _apply_tool_choice(
     request: CreateChatCompletionRequest,
     tools: list[dict[str, Any]],
@@ -524,31 +415,20 @@ def _apply_tool_choice(
             choice = ChatCompletionNamedToolChoice.model_validate(
                 {"type": "function", "function": {"name": legacy.name}}
             )
-    if not tools or choice is None or choice == ToolChoiceMode.AUTO:
-        return tools, None
-    if choice == ToolChoiceMode.NONE:
-        return [], None
-    if choice == ToolChoiceMode.REQUIRED:
-        return tools, "You must call one of the provided functions to respond."
+    normalized = ToolChoice()
     if isinstance(choice, ChatCompletionNamedToolChoice):
-        name = choice.function.name
-        return (
-            _restrict(tools, {name}, "tool_choice"),
-            f"You must call the function `{name}` to respond.",
+        normalized = ToolChoice(function=choice.function.name)
+    elif isinstance(choice, ChatCompletionAllowedToolsChoice):
+        normalized = ToolChoice(
+            allowed=frozenset(
+                str(entry.get("function", {}).get("name"))
+                for entry in choice.allowed_tools.tools
+            ),
+            allowed_required=choice.allowed_tools.mode == "required",
         )
-    if isinstance(choice, ChatCompletionAllowedToolsChoice):
-        names = {
-            str(entry.get("function", {}).get("name"))
-            for entry in choice.allowed_tools.tools
-        }
-        restricted = _restrict(tools, names, "tool_choice")
-        required = choice.allowed_tools.mode == "required"
-        return restricted, (
-            "You must call one of the provided functions to respond."
-            if required
-            else None
-        )
-    return tools, None
+    elif isinstance(choice, ToolChoiceMode):
+        normalized = ToolChoice(mode=choice.value)
+    return apply_tool_choice(tools, normalized)
 
 
 def _options(request: CreateChatCompletionRequest, num_ctx: int) -> dict[str, Any]:
@@ -596,7 +476,7 @@ async def _prepare(
     messages = _translate_messages(request)
     tools, instruction = _apply_tool_choice(request, _tools(request))
     if await models_repo.get_model(session, request.model) is None:
-        raise _model_not_found(request.model)
+        raise model_not_found(request.model)
     if instruction:
         if messages and messages[0].role == "system":
             messages[0].content = f"{messages[0].content}\n\n{instruction}"
@@ -662,27 +542,6 @@ def _logprobs(
     )
 
 
-async def _race[T](
-    work: Coroutine[Any, Any, T], is_disconnected: Callable[[], Awaitable[bool]]
-) -> T:
-    async def watch() -> None:
-        # Starlette only exposes disconnects by polling
-        while not await is_disconnected():  # noqa: ASYNC110
-            await asyncio.sleep(0.1)
-
-    task = asyncio.ensure_future(work)
-    watcher = asyncio.ensure_future(watch())
-    try:
-        await asyncio.wait({task, watcher}, return_when=asyncio.FIRST_COMPLETED)
-        if not task.done():
-            raise _ClientDisconnectedError
-        return task.result()
-    finally:
-        task.cancel()
-        watcher.cancel()
-        await asyncio.gather(task, watcher, return_exceptions=True)
-
-
 async def _generate_all(
     ollama: OllamaClient, prepared: _Prepared
 ) -> list[OllamaChatResponse]:
@@ -728,7 +587,7 @@ def _build_response(
         created=int(run.created_at.timestamp()),
         model=run.request.model,
         choices=choices,
-        usage=run.totals.usage(),
+        usage=_usage(run.totals),
     )
 
 
@@ -742,47 +601,45 @@ async def create_chat_completion(
     run = _Run(request, stream=False)
     trace = get_trace()
     _begin_trace(trace, run)
-    failed = ChatCompletionStatus.FAILED
+    failed = RequestStatus.FAILED
     try:
         prepared = await _prepare(request, session, ollama.num_ctx)
         for _ in range(prepared.n):
             trace.step_sent(prepared.ollama)
-        responses = await _race(_generate_all(ollama, prepared), is_disconnected)
+        responses = await race(_generate_all(ollama, prepared), is_disconnected)
         for response in responses:
             trace.step_received(response)
             run.totals.add(response)
-        if any(_overflowed(response, prepared.num_ctx) for response in responses):
-            raise _context_exceeded(prepared.num_ctx)
+        if any(overflowed(response, prepared.num_ctx) for response in responses):
+            raise context_exceeded(prepared.num_ctx)
         body = _build_response(run, responses)
-    except _ClientDisconnectedError:
-        _close_open_steps(trace, StepStatus.CANCELED)
-        await _record(session, run, ChatCompletionStatus.CANCELLED, response=None)
+    except ClientDisconnectedError:
+        close_open_steps(trace, StepStatus.CANCELED)
+        await _record(session, run, RequestStatus.CANCELLED, response=None)
         raise ApiError(
             499, "invalid_request_error", None, None, "Client closed the request."
         ) from None
     except asyncio.CancelledError:
-        _close_open_steps(trace, StepStatus.CANCELED)
-        await _record_shielded(
-            session, run, ChatCompletionStatus.CANCELLED, response=None
-        )
+        close_open_steps(trace, StepStatus.CANCELED)
+        await _record_shielded(session, run, RequestStatus.CANCELLED, response=None)
         raise
     except ApiError as exc:
-        _close_open_steps(trace, StepStatus.FAILED, exc.message)
+        close_open_steps(trace, StepStatus.FAILED, exc.message)
         await _record(session, run, failed, response=None, error=exc)
         raise
-    except _OLLAMA_ERRORS as exc:
-        error = _to_api_error(exc, request.model)
-        _close_open_steps(trace, StepStatus.FAILED, error.message)
+    except OLLAMA_ERRORS as exc:
+        error = to_api_error(exc, request.model)
+        close_open_steps(trace, StepStatus.FAILED, error.message)
         await _record(session, run, failed, response=None, error=error)
         raise error from exc
     except Exception:
-        _close_open_steps(trace, StepStatus.FAILED, "Internal server error")
-        await _record(session, run, failed, response=None, error=_internal_error())
+        close_open_steps(trace, StepStatus.FAILED, "Internal server error")
+        await _record(session, run, failed, response=None, error=internal_error())
         raise
     await _record(
         session,
         run,
-        ChatCompletionStatus.SUCCEEDED,
+        RequestStatus.SUCCEEDED,
         response=body.model_dump(mode="json", exclude_unset=True),
     )
     return body
@@ -805,7 +662,7 @@ async def start_stream(
     run = _Run(request, stream=True)
     trace = get_trace()
     _begin_trace(trace, run)
-    failed = ChatCompletionStatus.FAILED
+    failed = RequestStatus.FAILED
     upstream: AsyncGenerator[OllamaChatChunk] | None = None
     try:
         prepared = await _prepare(request, session, ollama.num_ctx)
@@ -814,31 +671,29 @@ async def start_stream(
         first = await anext(upstream)
         run.time_to_first_token_ms = run.elapsed_ms()
     except asyncio.CancelledError:
-        _close_open_steps(trace, StepStatus.CANCELED)
+        close_open_steps(trace, StepStatus.CANCELED)
         with anyio.CancelScope(shield=True):
             if upstream is not None:
                 await upstream.aclose()
-        await _record_shielded(
-            session, run, ChatCompletionStatus.CANCELLED, response=None
-        )
+        await _record_shielded(session, run, RequestStatus.CANCELLED, response=None)
         raise
     except StopAsyncIteration:
         error = ApiError(500, "server_error", None, None, "Ollama returned no data.")
-        _close_open_steps(trace, StepStatus.FAILED, error.message)
+        close_open_steps(trace, StepStatus.FAILED, error.message)
         await _record(session, run, failed, response=None, error=error)
         raise error from None
     except ApiError as exc:
-        _close_open_steps(trace, StepStatus.FAILED, exc.message)
+        close_open_steps(trace, StepStatus.FAILED, exc.message)
         await _record(session, run, failed, response=None, error=exc)
         raise
-    except _OLLAMA_ERRORS as exc:
-        error = _to_api_error(exc, request.model)
-        _close_open_steps(trace, StepStatus.FAILED, error.message)
+    except OLLAMA_ERRORS as exc:
+        error = to_api_error(exc, request.model)
+        close_open_steps(trace, StepStatus.FAILED, error.message)
         await _record(session, run, failed, response=None, error=error)
         raise error from exc
     except Exception:
-        _close_open_steps(trace, StepStatus.FAILED, "Internal server error")
-        await _record(session, run, failed, response=None, error=_internal_error())
+        close_open_steps(trace, StepStatus.FAILED, "Internal server error")
+        await _record(session, run, failed, response=None, error=internal_error())
         raise
     body = _stream_body(run, prepared, ollama, session, _chain(first, upstream))
     trace.add_closer(body.aclose)
@@ -876,7 +731,7 @@ async def _stream_body(
     session: AsyncSession,
     first_choice: AsyncGenerator[OllamaChatChunk],
 ) -> AsyncGenerator[StreamEvent]:
-    status = ChatCompletionStatus.CANCELLED
+    status = RequestStatus.CANCELLED
     error: ApiError | None = None
     wants_logprobs = bool(run.request.logprobs)
     trace = get_trace()
@@ -928,8 +783,8 @@ async def _stream_body(
                     if item.done:
                         finished = True
                         run.totals.add(item)
-                        if _overflowed(item, prepared.num_ctx):
-                            raise _context_exceeded(prepared.num_ctx)
+                        if overflowed(item, prepared.num_ctx):
+                            raise context_exceeded(prepared.num_ctx)
                         finish = _finish_reason(
                             item, tool_calls=bool(run.tool_calls[index])
                         )
@@ -950,34 +805,34 @@ async def _stream_body(
                 created=int(run.created_at.timestamp()),
                 model=run.request.model,
                 choices=[],
-                usage=run.totals.usage(),
+                usage=_usage(run.totals),
             )
-        status = ChatCompletionStatus.SUCCEEDED
+        status = RequestStatus.SUCCEEDED
     except ApiError as exc:
-        status, error = ChatCompletionStatus.FAILED, exc
+        status, error = RequestStatus.FAILED, exc
         yield _error_event(exc)
-    except _OLLAMA_ERRORS as exc:
+    except OLLAMA_ERRORS as exc:
         status, error = (
-            ChatCompletionStatus.FAILED,
-            _to_api_error(exc, run.request.model),
+            RequestStatus.FAILED,
+            to_api_error(exc, run.request.model),
         )
         yield _error_event(error)
     except Exception:
         logger.exception("Unexpected error while streaming chat completion")
-        status, error = ChatCompletionStatus.FAILED, _internal_error()
+        status, error = RequestStatus.FAILED, internal_error()
         yield _error_event(error)
     finally:
         partial = run.streamed_response() if run.contents else None
         match status:
-            case ChatCompletionStatus.SUCCEEDED:
+            case RequestStatus.SUCCEEDED:
                 trace.set_response(run.streamed_response())
-            case ChatCompletionStatus.FAILED:
+            case RequestStatus.FAILED:
                 failure = error.message if error else "Internal server error"
-                _close_open_steps(trace, StepStatus.FAILED, failure, partial)
+                close_open_steps(trace, StepStatus.FAILED, failure, partial)
                 trace.add_error(failure)
                 trace.set_outcome(TraceOutcome.ERROR)
-            case ChatCompletionStatus.CANCELLED:
-                _close_open_steps(trace, StepStatus.CANCELED, None, partial)
+            case RequestStatus.CANCELLED:
+                close_open_steps(trace, StepStatus.CANCELED, None, partial)
                 trace.set_outcome(TraceOutcome.CANCELED)
         await _record_shielded(
             session,

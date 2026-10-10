@@ -16,6 +16,7 @@ from api.logging import configure_logging
 from api.models import router as models_router
 from api.observability import router as observability_router
 from api.observability.tracing import TracingMiddleware, hub, writer
+from api.responses import router as responses_router
 
 configure_logging()
 
@@ -42,6 +43,7 @@ app.add_middleware(TracingMiddleware)
 v1_router = APIRouter(prefix="/v1")
 v1_router.include_router(health_router)
 v1_router.include_router(chat_router)
+v1_router.include_router(responses_router)
 v1_router.include_router(models_router)
 v1_router.include_router(analytics_router)
 v1_router.include_router(observability_router)
