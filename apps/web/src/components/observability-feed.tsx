@@ -58,8 +58,8 @@ export function ObservabilityFeed({
       ) : items.length === 0 ? (
         <p className="text-muted-foreground">
           No requests recorded yet. Requests to tracked endpoints, such as chat
-          completions, appear here as they happen. Send one from the Playground to get
-          started.
+          completions and responses, appear here as they happen. Send one from the
+          Playground to get started.
         </p>
       ) : (
         <Table>

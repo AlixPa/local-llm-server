@@ -468,3 +468,117 @@ async def test_failed_stream_records_error_without_response_returned(
     ]
     assert steps[2].status is StepStatus.FAILED
     assert steps[2].error_message
+
+
+RESPONSES = {"model": MODEL, "input": "Hi"}
+RESPONSES_STREAM = {**RESPONSES, "stream": True}
+
+
+async def test_responses_non_stream_is_traced(
+    client: AsyncClient,
+    ollama_mock: OllamaMock,
+    trace_writer: None,
+    read_traces: ReadTraces,
+) -> None:
+    ollama_mock.handler = lambda _: chat_response("Hello there")
+
+    response = await client.post("/v1/responses", json=RESPONSES)
+
+    [(request, steps)] = await read_traces()
+    assert request.endpoint == "/v1/responses"
+    assert request.outcome is TraceOutcome.SUCCESS
+    assert request.summary == f"{MODEL} · non-stream"
+    assert request.response_id == response.json()["id"]
+    assert request.response_id is not None
+    assert request.response_id.startswith("resp_")
+    assert _kinds(steps) == [
+        StepKind.REQUEST_RECEIVED,
+        StepKind.SENT_TO_OLLAMA,
+        StepKind.RECEIVED_FROM_OLLAMA,
+        StepKind.RESPONSE_RETURNED,
+    ]
+    assert steps[3].content == response.json()
+
+
+async def test_responses_stream_records_one_assembled_step(
+    client: AsyncClient,
+    ollama_mock: OllamaMock,
+    trace_writer: None,
+    read_traces: ReadTraces,
+) -> None:
+    ollama_mock.handler = lambda _: ndjson(stream_lines(["Hel", "lo"]))
+
+    response = await client.post("/v1/responses", json=RESPONSES_STREAM)
+
+    assert response.status_code == 200
+    [(request, steps)] = await read_traces()
+    assert request.outcome is TraceOutcome.SUCCESS
+    assert request.summary == f"{MODEL} · stream"
+    assert request.response_id is not None
+    assert request.response_id.startswith("resp_")
+    assert _kinds(steps) == [
+        StepKind.REQUEST_RECEIVED,
+        StepKind.SENT_TO_OLLAMA,
+        StepKind.RECEIVED_FROM_OLLAMA,
+        StepKind.RESPONSE_RETURNED,
+    ]
+    assert steps[2].status is StepStatus.COMPLETED
+    assert "Hello" in json.dumps(steps[2].content)
+    assert steps[3].content["id"] == request.response_id
+
+
+async def test_responses_failed_stream_records_error_step(
+    client: AsyncClient,
+    ollama_mock: OllamaMock,
+    trace_writer: None,
+    read_traces: ReadTraces,
+) -> None:
+    lines = [*stream_lines(["Hel"])[:-1], {"error": "model crashed"}]
+    ollama_mock.handler = lambda _: ndjson(lines)
+
+    response = await client.post("/v1/responses", json=RESPONSES_STREAM)
+
+    assert response.status_code == 200
+    [(request, steps)] = await read_traces()
+    assert request.outcome is TraceOutcome.ERROR
+    assert request.error_message
+    assert "model crashed" in request.error_message
+    assert StepKind.RESPONSE_RETURNED not in _kinds(steps)
+    assert _kinds(steps)[-1] is StepKind.ERROR
+
+
+async def test_responses_disconnect_records_canceled_partial_stream(
+    live_server: str,
+    ollama_mock: OllamaMock,
+    read_traces: ReadTraces,
+) -> None:
+    closed: list[bool] = []
+    ollama_mock.handler = lambda _: Response(
+        200, content=hanging_stream(stream_lines(["Hel"])[:-1], closed)
+    )
+
+    async with httpx.AsyncClient(base_url=live_server) as http:
+        async with http.stream("POST", "/v1/responses", json=RESPONSES_STREAM) as resp:
+            async for line in resp.aiter_lines():
+                if "Hel" in line:
+                    break
+
+    [(request, steps)] = await _settled(read_traces)
+    assert request.outcome is TraceOutcome.CANCELED
+    assert StepKind.RESPONSE_RETURNED not in _kinds(steps)
+    received = steps[-1]
+    assert received.kind is StepKind.RECEIVED_FROM_OLLAMA
+    assert received.status is StepStatus.CANCELED
+    assert "Hel" in json.dumps(received.content)
+
+
+async def test_responses_validation_failure_is_recorded(
+    client: AsyncClient, trace_writer: None, read_traces: ReadTraces
+) -> None:
+    response = await client.post("/v1/responses", json={"input": "Hi"})
+
+    assert response.status_code == 400
+    [(request, steps)] = await read_traces()
+    assert request.endpoint == "/v1/responses"
+    assert request.outcome is TraceOutcome.ERROR
+    assert _kinds(steps) == [StepKind.REQUEST_RECEIVED, StepKind.ERROR]

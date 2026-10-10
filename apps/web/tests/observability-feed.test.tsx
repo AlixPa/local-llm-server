@@ -84,9 +84,31 @@ test("shows an empty state that explains how to generate traffic", async () => {
   );
   renderWithProviders(<App />, "/observability");
 
-  expect(await screen.findByText(/No requests recorded yet/)).toHaveTextContent(
-    "Playground",
+  const empty = await screen.findByText(/No requests recorded yet/);
+  expect(empty).toHaveTextContent("Playground");
+  expect(empty).toHaveTextContent("chat completions and responses");
+});
+
+test("renders a responses entry with its endpoint", async () => {
+  server.use(
+    http.get("*/v1/observability/requests", () =>
+      HttpResponse.json(
+        list([
+          item(1, {
+            endpoint: "/v1/responses",
+            response_id: "resp_1",
+            summary: "qwen3.5:9b · non-stream",
+          }),
+        ]),
+      ),
+    ),
   );
+  renderWithProviders(<App />, "/observability");
+
+  const rows = await screen.findAllByRole("row");
+  const row = rowAt(rows, 1);
+  expect(row.getByText("/v1/responses")).toBeInTheDocument();
+  expect(row.getByText("qwen3.5:9b · non-stream")).toBeInTheDocument();
 });
 
 test("load more passes last_id as the after cursor", async () => {

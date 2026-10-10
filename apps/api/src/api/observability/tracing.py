@@ -24,7 +24,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 
-TRACKED = frozenset({("POST", "/v1/chat/completions")})
+TRACKED = frozenset({("POST", "/v1/chat/completions"), ("POST", "/v1/responses")})
 
 
 @dataclass(frozen=True)

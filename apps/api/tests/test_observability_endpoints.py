@@ -132,6 +132,22 @@ async def test_endpoint_filter_is_exact_match(
     assert await _ids(client, {"endpoint": "/v1/chat"}) == []
 
 
+async def test_endpoint_filter_returns_only_responses_entries(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    ids = await _seed_mixed(session)
+    request = await repo.create_request(
+        session,
+        endpoint="/v1/responses",
+        method="POST",
+        started_at=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+
+    assert await _ids(client, {"endpoint": "/v1/responses"}) == [request.id]
+    assert request.id not in await _ids(client, {"endpoint": "/v1/other"})
+    assert ids["c"] in await _ids(client, {})
+
+
 async def test_outcome_filter_is_repeatable(
     client: AsyncClient, session: AsyncSession
 ) -> None:
