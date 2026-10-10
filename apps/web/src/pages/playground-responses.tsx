@@ -2,6 +2,11 @@ import { useState } from "react";
 import { useModels } from "@/api/models";
 import { type CreateResponse, useCreateResponse } from "@/api/responses";
 import { type HistoryEntry, PlaygroundHistory } from "@/components/playground-history";
+import {
+  newMessage,
+  type PlaygroundMessage,
+  type ResponsesRole,
+} from "@/components/playground-messages";
 import type { OptionValues } from "@/components/playground-options";
 import { ResponsesPlaygroundInput } from "@/components/responses-playground-input";
 import {
@@ -11,6 +16,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useResponseStream } from "@/hooks/use-response-stream";
+
+function previewOf(messages: readonly PlaygroundMessage<ResponsesRole>[]): string {
+  const last = messages.at(-1);
+  return last && last.content !== "" ? last.content : "(no text)";
+}
 
 type Result = { answer: string; error: string | null };
 
@@ -38,7 +48,9 @@ export function PlaygroundResponsesPage() {
   const models = useModels();
   const creation = useCreateResponse();
   const stream = useResponseStream();
-  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<PlaygroundMessage<ResponsesRole>[]>(() => [
+    newMessage("user"),
+  ]);
   const [instructions, setInstructions] = useState("");
   const [chosenModel, setChosenModel] = useState<string | undefined>();
   const [values, setValues] = useState<OptionValues>({});
@@ -62,7 +74,7 @@ export function PlaygroundResponsesPage() {
       {
         id: crypto.randomUUID(),
         request,
-        preview: input === "" ? "(no text)" : input,
+        preview: previewOf(messages),
         status,
         answer,
         error,
@@ -73,7 +85,7 @@ export function PlaygroundResponsesPage() {
 
   const send = async () => {
     if (model === undefined) return;
-    const built = buildResponsesBody(model, input, instructions, values);
+    const built = buildResponsesBody(model, messages, instructions, values);
     if ("error" in built) {
       setFormError(built.error);
       return;
@@ -115,8 +127,8 @@ export function PlaygroundResponsesPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <ResponsesPlaygroundInput
-              input={input}
-              onInputChange={setInput}
+              messages={messages}
+              onMessagesChange={setMessages}
               instructions={instructions}
               onInstructionsChange={setInstructions}
             />

@@ -1,16 +1,22 @@
+import {
+  type PlaygroundMessage,
+  PlaygroundMessages,
+  RESPONSES_ROLES,
+  type ResponsesRole,
+} from "@/components/playground-messages";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
-  input: string;
-  onInputChange: (input: string) => void;
+  messages: PlaygroundMessage<ResponsesRole>[];
+  onMessagesChange: (messages: PlaygroundMessage<ResponsesRole>[]) => void;
   instructions: string;
   onInstructionsChange: (instructions: string) => void;
 };
 
 export function ResponsesPlaygroundInput({
-  input,
-  onInputChange,
+  messages,
+  onMessagesChange,
   instructions,
   onInstructionsChange,
 }: Props) {
@@ -25,14 +31,12 @@ export function ResponsesPlaygroundInput({
           onChange={(event) => onInstructionsChange(event.target.value)}
         />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="responses-input">Input</Label>
-        <Textarea
-          id="responses-input"
-          value={input}
-          onChange={(event) => onInputChange(event.target.value)}
-        />
-      </div>
+      <PlaygroundMessages
+        messages={messages}
+        onChange={onMessagesChange}
+        roles={RESPONSES_ROLES}
+        defaultRole="user"
+      />
     </div>
   );
 }

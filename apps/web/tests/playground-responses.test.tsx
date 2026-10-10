@@ -46,7 +46,7 @@ async function renderPlayground() {
       "qwen3:8b",
     ),
   );
-  await user.type(screen.getByRole("textbox", { name: "Input" }), "Hello");
+  await user.type(screen.getByRole("textbox", { name: "Message 1" }), "Hello");
   return user;
 }
 
@@ -70,7 +70,7 @@ test("a non-streamed request shows the full answer and builds the body", async (
   expect(await screen.findByText("Hi there")).toBeInTheDocument();
   expect(body).toMatchObject({
     model: "qwen3:8b",
-    input: "Hello",
+    input: [{ role: "user", content: "Hello" }],
     instructions: "Be brief",
     temperature: 0.2,
   });
@@ -170,4 +170,30 @@ test("history holds only Responses entries", async () => {
   await user.click(screen.getByRole("button", { name: "Send" }));
   await screen.findByText("one");
   expect(screen.getAllByRole("button", { name: /^#\d/ })).toHaveLength(1);
+});
+
+test("multiple messages with roles are sent as an input list", async () => {
+  const user = await renderPlayground();
+  let body: Record<string, unknown> = {};
+  server.use(
+    http.post("*/v1/responses", async ({ request }) => {
+      const json: unknown = await request.json();
+      if (typeof json === "object" && json !== null) {
+        body = Object.fromEntries(Object.entries(json));
+      }
+      return HttpResponse.json(response("ok"));
+    }),
+  );
+
+  await user.click(screen.getByRole("button", { name: "Add message" }));
+  await user.click(screen.getByRole("combobox", { name: "Role of message 2" }));
+  await user.click(await screen.findByRole("option", { name: "developer" }));
+  await user.type(screen.getByRole("textbox", { name: "Message 2" }), "Be terse");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+
+  await screen.findByText("ok");
+  expect(body.input).toEqual([
+    { role: "user", content: "Hello" },
+    { role: "developer", content: "Be terse" },
+  ]);
 });

@@ -1,4 +1,8 @@
 import type { CreateResponse } from "@/api/responses";
+import type {
+  PlaygroundMessage,
+  ResponsesRole,
+} from "@/components/playground-messages";
 import {
   collectOptions,
   OptionControls,
@@ -45,7 +49,7 @@ export type BuildResponsesResult = { body: CreateResponse } | { error: string };
 
 export function buildResponsesBody(
   model: string,
-  input: string,
+  messages: readonly PlaygroundMessage<ResponsesRole>[],
   instructions: string,
   values: OptionValues,
 ): BuildResponsesResult {
@@ -55,7 +59,7 @@ export function buildResponsesBody(
     body: {
       ...collected.extras,
       model,
-      input,
+      input: messages.map(({ role, content }) => ({ role, content })),
       ...(instructions === "" ? {} : { instructions }),
     },
   };

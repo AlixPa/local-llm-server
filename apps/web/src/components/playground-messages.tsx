@@ -10,25 +10,36 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-export const ROLES = ["system", "user", "assistant"] as const;
-export type Role = (typeof ROLES)[number];
-export type PlaygroundMessage = { id: string; role: Role; content: string };
+export const CHAT_ROLES = ["system", "user", "assistant"] as const;
+export const RESPONSES_ROLES = ["user", "assistant", "developer"] as const;
+export type ChatRole = (typeof CHAT_ROLES)[number];
+export type ResponsesRole = (typeof RESPONSES_ROLES)[number];
+export type PlaygroundMessage<R extends string = ChatRole> = {
+  id: string;
+  role: R;
+  content: string;
+};
 
-function isRole(value: string | null): value is Role {
-  return ROLES.some((role) => role === value);
-}
-
-export function newMessage(role: Role = "user"): PlaygroundMessage {
+export function newMessage<R extends string>(role: R): PlaygroundMessage<R> {
   return { id: crypto.randomUUID(), role, content: "" };
 }
 
-type Props = {
-  messages: PlaygroundMessage[];
-  onChange: (messages: PlaygroundMessage[]) => void;
+type Props<R extends string> = {
+  messages: PlaygroundMessage<R>[];
+  onChange: (messages: PlaygroundMessage<R>[]) => void;
+  roles: readonly R[];
+  defaultRole: R;
 };
 
-export function PlaygroundMessages({ messages, onChange }: Props) {
-  const update = (id: string, patch: Partial<PlaygroundMessage>) =>
+export function PlaygroundMessages<R extends string>({
+  messages,
+  onChange,
+  roles,
+  defaultRole,
+}: Props<R>) {
+  const isRole = (value: string | null): value is R =>
+    roles.some((role) => role === value);
+  const update = (id: string, patch: Partial<PlaygroundMessage<R>>) =>
     onChange(
       messages.map((message) =>
         message.id === id ? { ...message, ...patch } : message,
@@ -52,7 +63,7 @@ export function PlaygroundMessages({ messages, onChange }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLES.map((role) => (
+                  {roles.map((role) => (
                     <SelectItem key={role} value={role}>
                       {role}
                     </SelectItem>
@@ -82,7 +93,7 @@ export function PlaygroundMessages({ messages, onChange }: Props) {
         type="button"
         variant="outline"
         className="self-start"
-        onClick={() => onChange([...messages, newMessage()])}
+        onClick={() => onChange([...messages, newMessage(defaultRole)])}
       >
         <PlusIcon /> Add message
       </Button>

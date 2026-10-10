@@ -3,6 +3,7 @@ import { type CreateChatCompletionRequest, useCreateChatCompletion } from "@/api
 import { useModels } from "@/api/models";
 import { type HistoryEntry, PlaygroundHistory } from "@/components/playground-history";
 import {
+  CHAT_ROLES,
   newMessage,
   type PlaygroundMessage,
   PlaygroundMessages,
@@ -27,7 +28,9 @@ export function PlaygroundChatPage() {
   const models = useModels();
   const completion = useCreateChatCompletion();
   const stream = useChatStream();
-  const [messages, setMessages] = useState<PlaygroundMessage[]>(() => [newMessage()]);
+  const [messages, setMessages] = useState<PlaygroundMessage[]>(() => [
+    newMessage("user"),
+  ]);
   const [chosenModel, setChosenModel] = useState<string | undefined>();
   const [values, setValues] = useState<OptionValues>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -105,7 +108,12 @@ export function PlaygroundChatPage() {
             <CardTitle>Conversation</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <PlaygroundMessages messages={messages} onChange={setMessages} />
+            <PlaygroundMessages
+              messages={messages}
+              onChange={setMessages}
+              roles={CHAT_ROLES}
+              defaultRole="user"
+            />
             <div className="flex gap-2">
               <Button
                 type="button"
