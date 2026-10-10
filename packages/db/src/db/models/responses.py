@@ -9,11 +9,11 @@ from db.models.status import RequestStatus
 from db.types import UtcDateTime
 
 
-class ChatCompletionRecord(Base):
-    __tablename__ = "chat_completion_records"
+class ResponseRecord(Base):
+    __tablename__ = "response_records"
     __table_args__ = (
         Index(
-            "ix_chat_completion_records_created_at_external_id",
+            "ix_response_records_created_at_external_id",
             desc("created_at"),
             desc("external_id"),
         ),
@@ -33,7 +33,6 @@ class ChatCompletionRecord(Base):
         )
     )
     stream: Mapped[bool]
-    n: Mapped[int]
     prompt_tokens: Mapped[int | None]
     completion_tokens: Mapped[int | None]
     duration_ms: Mapped[int]
@@ -45,12 +44,12 @@ class ChatCompletionRecord(Base):
     error_code: Mapped[str | None]
 
 
-class ChatCompletionContent(Base):
-    __tablename__ = "chat_completion_contents"
+class ResponseContent(Base):
+    __tablename__ = "response_contents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     record_id: Mapped[int] = mapped_column(
-        ForeignKey("chat_completion_records.id", ondelete="CASCADE"), unique=True
+        ForeignKey("response_records.id", ondelete="CASCADE"), unique=True
     )
     request: Mapped[dict[str, Any]] = mapped_column(JSON)
     response: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))

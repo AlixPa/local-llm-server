@@ -2,7 +2,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from db.models import ChatCompletionStatus
+from db.models import RequestStatus
 from db.repositories.chat_completions import create_chat_completion
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ type Schema = Callable[[Any, str], None]
 async def _seed(
     session: AsyncSession,
     index: int,
-    status: ChatCompletionStatus = ChatCompletionStatus.SUCCEEDED,
+    status: RequestStatus = RequestStatus.SUCCEEDED,
     **overrides: Any,
 ) -> None:
     values: dict[str, Any] = {
@@ -82,7 +82,7 @@ async def test_failed_request_has_null_tokens(
     await _seed(
         session,
         1,
-        ChatCompletionStatus.FAILED,
+        RequestStatus.FAILED,
         prompt_tokens=None,
         completion_tokens=None,
         error_type="invalid_request_error",
@@ -163,14 +163,14 @@ async def test_summary_and_no_content_leak(
     await _seed(
         session,
         2,
-        ChatCompletionStatus.FAILED,
+        RequestStatus.FAILED,
         prompt_tokens=None,
         completion_tokens=None,
         duration_ms=2000,
         time_to_first_token_ms=None,
         generation_duration_ms=None,
     )
-    await _seed(session, 3, ChatCompletionStatus.CANCELLED)
+    await _seed(session, 3, RequestStatus.CANCELLED)
 
     listing = await client.get("/v1/analytics/chat-completions")
     summary = await client.get("/v1/analytics/chat-completions/summary")

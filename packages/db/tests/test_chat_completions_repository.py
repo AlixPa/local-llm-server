@@ -6,7 +6,7 @@ import pytest
 from db.models import (
     ChatCompletionContent,
     ChatCompletionRecord,
-    ChatCompletionStatus,
+    RequestStatus,
 )
 from db.repositories.chat_completions import (
     ChatCompletionSummary,
@@ -28,7 +28,7 @@ async def _create(
         external_id="chatcmpl-abc",
         created_at=created_at or datetime(2026, 1, 1, 12, tzinfo=UTC),
         model="qwen3.5:9b",
-        status=ChatCompletionStatus.SUCCEEDED,
+        status=RequestStatus.SUCCEEDED,
         stream=False,
         n=1,
         prompt_tokens=5,
@@ -53,7 +53,7 @@ async def test_create_persists_record_and_content(session: AsyncSession) -> None
     content = (await session.execute(select(ChatCompletionContent))).scalar_one()
     assert stored.id == record.id
     assert stored.external_id == "chatcmpl-abc"
-    assert stored.status is ChatCompletionStatus.SUCCEEDED
+    assert stored.status is RequestStatus.SUCCEEDED
     assert stored.prompt_tokens == 5
     assert content.record_id == record.id
     assert content.request == {"messages": [{"role": "user", "content": "hi"}]}
@@ -89,7 +89,7 @@ async def _seed(
     session: AsyncSession,
     external_id: str,
     created_at: datetime,
-    status: ChatCompletionStatus = ChatCompletionStatus.SUCCEEDED,
+    status: RequestStatus = RequestStatus.SUCCEEDED,
     **overrides: Any,
 ) -> None:
     values: dict[str, Any] = {
@@ -180,15 +180,13 @@ async def test_summary_figures(session: AsyncSession) -> None:
         session,
         "b",
         base + timedelta(seconds=1),
-        ChatCompletionStatus.FAILED,
+        RequestStatus.FAILED,
         prompt_tokens=None,
         completion_tokens=None,
         duration_ms=300,
         generation_duration_ms=None,
     )
-    await _seed(
-        session, "c", base + timedelta(seconds=2), ChatCompletionStatus.CANCELLED
-    )
+    await _seed(session, "c", base + timedelta(seconds=2), RequestStatus.CANCELLED)
 
     summary = await get_chat_completion_summary(session)
 
@@ -210,7 +208,7 @@ async def test_page_query_is_fast_with_10k_rows(session: AsyncSession) -> None:
             external_id=f"id-{i}",
             created_at=base + timedelta(seconds=i),
             model="m",
-            status=ChatCompletionStatus.SUCCEEDED,
+            status=RequestStatus.SUCCEEDED,
             stream=False,
             n=1,
             prompt_tokens=1,

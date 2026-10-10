@@ -1,10 +1,8 @@
 from .base import Base
-from .chat_completions import (
-    ChatCompletionContent,
-    ChatCompletionRecord,
-    ChatCompletionStatus,
-)
+from .chat_completions import ChatCompletionContent, ChatCompletionRecord
 from .models import Model
+from .responses import ResponseContent, ResponseRecord
+from .status import RequestStatus
 from .tracing import (
     Participant,
     StepKind,
@@ -18,9 +16,11 @@ __all__ = [
     "Base",
     "ChatCompletionContent",
     "ChatCompletionRecord",
-    "ChatCompletionStatus",
     "Model",
     "Participant",
+    "RequestStatus",
+    "ResponseContent",
+    "ResponseRecord",
     "StepKind",
     "StepStatus",
     "TraceOutcome",

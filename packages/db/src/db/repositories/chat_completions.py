@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import (
     ChatCompletionContent,
     ChatCompletionRecord,
-    ChatCompletionStatus,
+    RequestStatus,
 )
 
 
@@ -18,7 +18,7 @@ async def create_chat_completion(
     external_id: str,
     created_at: datetime,
     model: str,
-    status: ChatCompletionStatus,
+    status: RequestStatus,
     stream: bool,
     n: int,
     prompt_tokens: int | None,
@@ -116,8 +116,7 @@ async def get_chat_completion_summary(
                     func.sum(
                         case(
                             (
-                                ChatCompletionRecord.status
-                                == ChatCompletionStatus.FAILED,
+                                ChatCompletionRecord.status == RequestStatus.FAILED,
                                 1,
                             ),
                             else_=0,

@@ -3,7 +3,8 @@ from typing import Any
 
 import pytest
 from api.chat.schemas import CreateChatCompletionRequest
-from api.chat.service import FIELD_POLICY, Policy
+from api.chat.service import FIELD_POLICY
+from api.inference import Policy
 from httpx import AsyncClient
 from ollama_fakes import OllamaMock, chat_response
 

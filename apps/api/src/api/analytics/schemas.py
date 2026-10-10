@@ -1,6 +1,6 @@
 from typing import Literal
 
-from db.models import ChatCompletionRecord, ChatCompletionStatus
+from db.models import ChatCompletionRecord, RequestStatus
 from db.repositories.chat_completions import ChatCompletionSummary
 from pydantic import BaseModel, ConfigDict
 
@@ -11,7 +11,7 @@ class ChatCompletionAnalyticsItem(BaseModel):
     id: str
     created: int
     model: str
-    status: ChatCompletionStatus
+    status: RequestStatus
     stream: bool
     n: int
     prompt_tokens: int | None

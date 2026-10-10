@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 import pytest
-from db.models import ChatCompletionContent, ChatCompletionRecord, ChatCompletionStatus
+from db.models import ChatCompletionContent, ChatCompletionRecord, RequestStatus
 from httpx import AsyncClient, Request, Response
 from ollama_fakes import OllamaMock, chat_response
 from sqlalchemy import select
@@ -63,7 +63,7 @@ async def test_minimal_success(
     assert sent["options"]["num_ctx"] == 32768
     [record] = await _records(session)
     assert record.external_id == body["id"]
-    assert record.status == ChatCompletionStatus.SUCCEEDED
+    assert record.status == RequestStatus.SUCCEEDED
     assert (record.prompt_tokens, record.completion_tokens) == (5, 3)
     assert record.generation_duration_ms == 2000
     assert record.load_duration_ms == 1000
@@ -209,7 +209,7 @@ async def test_unsupported_option_is_rejected_and_recorded(
     assert error["code"] == "unsupported_parameter"
     assert error["param"] == "audio"
     [record] = await _records(session)
-    assert record.status == ChatCompletionStatus.FAILED
+    assert record.status == RequestStatus.FAILED
     assert record.error_code == "unsupported_parameter"
     assert record.prompt_tokens is None
 
@@ -228,7 +228,7 @@ async def test_context_overflow(
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "context_length_exceeded"
     [record] = await _records(session)
-    assert record.status == ChatCompletionStatus.FAILED
+    assert record.status == RequestStatus.FAILED
     assert record.prompt_tokens == 32768 // 2 + 2
 
 
@@ -263,7 +263,7 @@ async def test_unknown_model(
     assert ollama_mock.requests == []
     [record] = await _records(session)
     assert record.model == "gpt-4o"
-    assert record.status == ChatCompletionStatus.FAILED
+    assert record.status == RequestStatus.FAILED
 
 
 async def test_model_missing_in_ollama(
@@ -299,7 +299,7 @@ async def test_ollama_unreachable(
     error = response.json()["error"]
     assert (error["type"], error["code"]) == ("server_error", None)
     [record] = await _records(session)
-    assert record.status == ChatCompletionStatus.FAILED
+    assert record.status == RequestStatus.FAILED
     assert record.error_type == "server_error"
 
 

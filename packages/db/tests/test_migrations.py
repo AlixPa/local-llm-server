@@ -29,6 +29,8 @@ def test_upgrade_head_creates_tables(
         "chat_completion_records",
         "chat_completion_contents",
         "models",
+        "response_contents",
+        "response_records",
         "traced_requests",
         "workflow_steps",
     }
