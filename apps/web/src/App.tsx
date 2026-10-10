@@ -10,7 +10,7 @@ export function App() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <Routes>
           <Route path="/" element={<Navigate to="/playground/chat" replace />} />
           <Route path="/playground/chat" element={<PlaygroundChatPage />} />

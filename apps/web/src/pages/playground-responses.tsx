@@ -119,7 +119,7 @@ export function PlaygroundResponsesPage() {
   const shown = stream.isStreaming ? { answer: stream.text, error: null } : result;
 
   return (
-    <div className="grid gap-4 p-4 lg:grid-cols-[1fr_20rem]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex flex-col gap-4">
         <Card>
           <CardHeader>

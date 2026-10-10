@@ -24,7 +24,7 @@ export function PlaygroundHistory({ entries, selectedId, onSelect }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       <ul className="flex flex-col gap-1">
         {entries.map((entry, index) => (
           <li key={entry.id}>
@@ -45,13 +45,13 @@ export function PlaygroundHistory({ entries, selectedId, onSelect }: Props) {
         ))}
       </ul>
       {selected && (
-        <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+        <div className="flex min-w-0 flex-col gap-2 rounded-lg border p-3 text-sm">
           <h3 className="font-medium">Request</h3>
-          <pre className="overflow-x-auto text-xs">
+          <pre className="max-w-full overflow-x-auto text-xs">
             {JSON.stringify(selected.request, null, 2)}
           </pre>
           <h3 className="font-medium">{selected.error ? "Error" : "Answer"}</h3>
-          <pre className="whitespace-pre-wrap text-xs">
+          <pre className="wrap-anywhere whitespace-pre-wrap text-xs">
             {selected.error ?? selected.answer}
           </pre>
         </div>
