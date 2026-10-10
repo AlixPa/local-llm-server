@@ -1,36 +1,56 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from db.engine import get_session
-from db.repositories import chat_completions as repo
+from db.models import RequestStatus
+from db.repositories import analytics as repo
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.analytics.schemas import (
-    ChatCompletionAnalyticsItem,
-    ChatCompletionAnalyticsList,
-    ChatCompletionAnalyticsSummary,
+    AnalyticsRequestItem,
+    AnalyticsRequestList,
+    AnalyticsRequestSummary,
 )
 from api.errors import ApiError
 
-router = APIRouter(prefix="/analytics/chat-completions")
+router = APIRouter(prefix="/analytics/requests")
+
+
+def _filters(
+    endpoint: repo.Endpoint | None = None,
+    status: RequestStatus | None = None,
+    since: int | None = None,
+    until: int | None = None,
+) -> repo.RequestFilters:
+    return repo.RequestFilters(
+        endpoint=endpoint,
+        status=status,
+        since=None if since is None else datetime.fromtimestamp(since, UTC),
+        until=None if until is None else datetime.fromtimestamp(until, UTC),
+    )
+
+
+Filters = Annotated[repo.RequestFilters, Depends(_filters)]
 
 
 @router.get("")
-async def list_chat_completions(
+async def list_requests(
     session: Annotated[AsyncSession, Depends(get_session)],
+    filters: Filters,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     after: str | None = None,
-) -> ChatCompletionAnalyticsList:
+) -> AnalyticsRequestList:
     try:
-        records, has_more = await repo.list_chat_completion_metadata(
-            session, limit=limit, after=after
+        records, has_more = await repo.list_request_metadata(
+            session, limit=limit, after=after, filters=filters
         )
     except repo.UnknownCursorError:
         raise ApiError(
             404, "invalid_request_error", "not_found", "after", f"No such id: {after}"
         ) from None
-    items = [ChatCompletionAnalyticsItem.from_record(record) for record in records]
-    return ChatCompletionAnalyticsList(
+    items = [AnalyticsRequestItem.from_metadata(record) for record in records]
+    return AnalyticsRequestList(
         object="list",
         data=items,
         first_id=items[0].id if items else None,
@@ -40,9 +60,10 @@ async def list_chat_completions(
 
 
 @router.get("/summary")
-async def get_chat_completions_summary(
+async def get_requests_summary(
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> ChatCompletionAnalyticsSummary:
-    return ChatCompletionAnalyticsSummary.from_summary(
-        await repo.get_chat_completion_summary(session)
+    filters: Filters,
+) -> AnalyticsRequestSummary:
+    return AnalyticsRequestSummary.from_summary(
+        await repo.get_request_summary(session, filters=filters)
     )

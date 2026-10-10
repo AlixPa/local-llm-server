@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { expect, test } from "vitest";
@@ -15,7 +15,7 @@ function item(id: string, overrides: Record<string, unknown> = {}) {
     model: "qwen3.5:9b",
     status: "succeeded",
     stream: true,
-    n: 1,
+    endpoint: "/v1/chat/completions",
     prompt_tokens: 42,
     completion_tokens: 128,
     total_tokens: 170,
@@ -45,20 +45,23 @@ const SUMMARY = {
 
 function mockAnalytics(afterValues: (string | null)[] = []) {
   server.use(
-    http.get("*/v1/analytics/chat-completions/summary", () =>
-      HttpResponse.json(SUMMARY),
-    ),
-    http.get("*/v1/analytics/chat-completions", ({ request }) => {
+    http.get("*/v1/analytics/requests/summary", () => HttpResponse.json(SUMMARY)),
+    http.get("*/v1/analytics/requests", ({ request }) => {
       const after = new URL(request.url).searchParams.get("after");
       afterValues.push(after);
       if (after === null) {
         return HttpResponse.json({
           object: "list",
           data: [
-            item("chatcmpl-2", { status: "failed", time_to_first_token_ms: null }),
+            item("resp_2", {
+              endpoint: "/v1/responses",
+              status: "failed",
+              time_to_first_token_ms: null,
+              error_type: "server_error",
+            }),
             item("chatcmpl-1", { load_duration_ms: null }),
           ],
-          first_id: "chatcmpl-2",
+          first_id: "resp_2",
           last_id: "chatcmpl-1",
           has_more: true,
         });
@@ -85,13 +88,16 @@ test("renders rows and summary, loads the next page by cursor", async () => {
   const failed = within(rows[1] as HTMLElement);
   expect(failed.getByText("failed")).toBeInTheDocument();
   expect(failed.getByText("3,150 ms")).toBeInTheDocument();
-  expect(failed.getAllByText("—")).toHaveLength(1);
+  expect(failed.getByText("/v1/responses")).toBeInTheDocument();
+  expect(failed.getByText("server_error")).toBeInTheDocument();
+  expect(
+    within(rows[2] as HTMLElement).getByText("/v1/chat/completions"),
+  ).toBeInTheDocument();
 
   expect(screen.getByText("25.0%")).toBeInTheDocument();
   expect(screen.getByText("1,280")).toBeInTheDocument();
   expect(screen.getByText("3,000 ms")).toBeInTheDocument();
   expect(screen.getByText("2,500 ms")).toBeInTheDocument();
-  expect(screen.getAllByText("—").length).toBeGreaterThan(1);
 
   await user.click(screen.getByRole("button", { name: "Load more" }));
 
@@ -103,7 +109,7 @@ test("renders rows and summary, loads the next page by cursor", async () => {
 
 test("shows the empty state and a dash for the error rate", async () => {
   server.use(
-    http.get("*/v1/analytics/chat-completions/summary", () =>
+    http.get("*/v1/analytics/requests/summary", () =>
       HttpResponse.json({
         ...SUMMARY,
         request_count: 0,
@@ -112,7 +118,7 @@ test("shows the empty state and a dash for the error rate", async () => {
         avg_generation_duration_ms: null,
       }),
     ),
-    http.get("*/v1/analytics/chat-completions", () =>
+    http.get("*/v1/analytics/requests", () =>
       HttpResponse.json({
         object: "list",
         data: [],
@@ -132,10 +138,8 @@ test("shows the empty state and a dash for the error rate", async () => {
 
 test("shows the server error message as-is", async () => {
   server.use(
-    http.get("*/v1/analytics/chat-completions/summary", () =>
-      HttpResponse.json(SUMMARY),
-    ),
-    http.get("*/v1/analytics/chat-completions", () =>
+    http.get("*/v1/analytics/requests/summary", () => HttpResponse.json(SUMMARY)),
+    http.get("*/v1/analytics/requests", () =>
       HttpResponse.json(
         {
           error: {
@@ -152,4 +156,48 @@ test("shows the server error message as-is", async () => {
   renderWithProviders(<App />, "/analytics");
 
   expect(await screen.findByText("Database is down")).toBeInTheDocument();
+});
+
+test("filters change the requests sent for both table and summary", async () => {
+  const listQueries: URLSearchParams[] = [];
+  const summaryQueries: URLSearchParams[] = [];
+  server.use(
+    http.get("*/v1/analytics/requests/summary", ({ request }) => {
+      summaryQueries.push(new URL(request.url).searchParams);
+      return HttpResponse.json(SUMMARY);
+    }),
+    http.get("*/v1/analytics/requests", ({ request }) => {
+      listQueries.push(new URL(request.url).searchParams);
+      return HttpResponse.json({
+        object: "list",
+        data: [],
+        first_id: null,
+        last_id: null,
+        has_more: false,
+      });
+    }),
+  );
+  const user = userEvent.setup();
+  renderWithProviders(<App />, "/analytics");
+  expect(await screen.findByText("No requests recorded yet")).toBeInTheDocument();
+
+  await user.selectOptions(screen.getByLabelText("Endpoint"), "/v1/responses");
+  await user.selectOptions(screen.getByLabelText("Status"), "failed");
+  await user.type(screen.getByLabelText("Since"), "2026-01-01T00:00");
+  const since = String(Math.floor(new Date("2026-01-01T00:00").getTime() / 1000));
+
+  await waitFor(() => {
+    for (const query of [listQueries.at(-1), summaryQueries.at(-1)]) {
+      expect(query?.get("endpoint")).toBe("/v1/responses");
+      expect(query?.get("status")).toBe("failed");
+      expect(query?.get("since")).toBe(since);
+    }
+  });
+  expect(await screen.findByText(/No requests match/)).toBeInTheDocument();
+
+  await user.click(
+    screen.getAllByRole("button", { name: "Clear filters" })[0] as HTMLElement,
+  );
+  await waitFor(() => expect(listQueries.at(-1)?.has("endpoint")).toBe(false));
+  expect(summaryQueries.at(-1)?.has("status")).toBe(false);
 });

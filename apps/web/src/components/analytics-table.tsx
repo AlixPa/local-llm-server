@@ -1,4 +1,4 @@
-import type { ChatCompletionAnalyticsItem } from "@/api/analytics";
+import type { AnalyticsRequestItem } from "@/api/analytics";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,9 @@ import {
 import { formatMs } from "@/lib/format";
 
 type Props = {
-  items: ChatCompletionAnalyticsItem[];
+  items: AnalyticsRequestItem[];
+  filtersActive: boolean;
+  onClearFilters: () => void;
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore: () => void;
@@ -28,9 +30,25 @@ function tokens(value: number | null): string {
   return value === null ? "—" : value.toLocaleString();
 }
 
-export function AnalyticsTable({ items, hasMore, isLoadingMore, onLoadMore }: Props) {
+export function AnalyticsTable({
+  items,
+  filtersActive,
+  onClearFilters,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+}: Props) {
   if (items.length === 0) {
-    return <p className="text-muted-foreground">No requests recorded yet</p>;
+    return filtersActive ? (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-muted-foreground">No requests match the current filters</p>
+        <Button variant="outline" onClick={onClearFilters}>
+          Clear filters
+        </Button>
+      </div>
+    ) : (
+      <p className="text-muted-foreground">No requests recorded yet</p>
+    );
   }
 
   return (
@@ -39,6 +57,7 @@ export function AnalyticsTable({ items, hasMore, isLoadingMore, onLoadMore }: Pr
         <TableHeader>
           <TableRow>
             <TableHead>Time</TableHead>
+            <TableHead>Endpoint</TableHead>
             <TableHead>Model</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Input tokens</TableHead>
@@ -48,12 +67,14 @@ export function AnalyticsTable({ items, hasMore, isLoadingMore, onLoadMore }: Pr
             <TableHead>Time to first token</TableHead>
             <TableHead>Model load</TableHead>
             <TableHead>Generation</TableHead>
+            <TableHead>Error</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.map((item) => (
             <TableRow key={item.id}>
               <TableCell>{new Date(item.created * 1000).toLocaleString()}</TableCell>
+              <TableCell>{item.endpoint}</TableCell>
               <TableCell>{item.model}</TableCell>
               <TableCell>
                 <Badge variant={STATUS_VARIANT[item.status]}>{item.status}</Badge>
@@ -65,6 +86,7 @@ export function AnalyticsTable({ items, hasMore, isLoadingMore, onLoadMore }: Pr
               <TableCell>{formatMs(item.time_to_first_token_ms)}</TableCell>
               <TableCell>{formatMs(item.load_duration_ms)}</TableCell>
               <TableCell>{formatMs(item.generation_duration_ms)}</TableCell>
+              <TableCell>{item.error_type ?? "—"}</TableCell>
             </TableRow>
           ))}
         </TableBody>

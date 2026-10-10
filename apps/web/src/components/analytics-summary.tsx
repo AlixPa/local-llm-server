@@ -1,4 +1,4 @@
-import type { ChatCompletionAnalyticsSummary } from "@/api/analytics";
+import type { AnalyticsRequestSummary } from "@/api/analytics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMs } from "@/lib/format";
 
@@ -13,11 +13,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function AnalyticsSummary({
-  summary,
-}: {
-  summary: ChatCompletionAnalyticsSummary;
-}) {
+export function AnalyticsSummary({ summary }: { summary: AnalyticsRequestSummary }) {
   const errorRate =
     summary.request_count === 0
       ? "—"

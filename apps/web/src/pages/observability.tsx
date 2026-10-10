@@ -1,13 +1,17 @@
 import { useMemo, useState } from "react";
-import { useTracedRequest, useTracedRequests } from "@/api/observability";
+import {
+  TRACE_OUTCOMES,
+  toRequestFilters,
+  useTracedRequest,
+  useTracedRequests,
+} from "@/api/observability";
 import { ObservabilityFeed } from "@/components/observability-feed";
+import { ObservabilitySequence } from "@/components/observability-sequence";
 import {
   EMPTY_FILTERS,
   type FilterValues,
-  ObservabilityFilters,
-  toRequestFilters,
-} from "@/components/observability-filters";
-import { ObservabilitySequence } from "@/components/observability-sequence";
+  RequestFilters,
+} from "@/components/request-filters";
 import { Button } from "@/components/ui/button";
 import { useObservabilityEvents } from "@/hooks/use-observability-events";
 
@@ -20,13 +24,6 @@ export function ObservabilityPage() {
   const list = useTracedRequests(filters);
   const detail = useTracedRequest(selectedId);
   const items = list.data?.pages.flatMap((page) => page.data) ?? [];
-  const [knownEndpoints, setKnownEndpoints] = useState<string[]>([]);
-  const unseen = items.filter((item) => !knownEndpoints.includes(item.endpoint));
-  if (unseen.length > 0) {
-    setKnownEndpoints([
-      ...new Set([...knownEndpoints, ...unseen.map((item) => item.endpoint)]),
-    ]);
-  }
   const filtersActive = Object.values(filters).some((v) => v !== undefined);
 
   return (
@@ -50,13 +47,13 @@ export function ObservabilityPage() {
         </div>
       )}
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <ObservabilityFilters
+        <RequestFilters
           values={filterValues}
           onChange={(values) => {
             setFilterValues(values);
             clearPending();
           }}
-          knownEndpoints={knownEndpoints}
+          statusOptions={TRACE_OUTCOMES}
         />
         <div className="flex items-center gap-3">
           {paused && pendingCount > 0 && (
