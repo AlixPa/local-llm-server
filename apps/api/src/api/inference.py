@@ -113,9 +113,12 @@ class Totals:
 async def race[T](
     work: Coroutine[Any, Any, T], is_disconnected: Callable[[], Awaitable[bool]]
 ) -> T:
+    finished = asyncio.Event()
+
     async def watch() -> None:
-        # Starlette only exposes disconnects by polling
-        while not await is_disconnected():  # noqa: ASYNC110
+        # Starlette only exposes disconnects by polling. Its is_disconnected can
+        # swallow a cancellation, so the loop also ends on this flag.
+        while not finished.is_set() and not await is_disconnected():  # noqa: ASYNC110
             await asyncio.sleep(0.1)
 
     task = asyncio.ensure_future(work)
@@ -126,6 +129,7 @@ async def race[T](
             raise ClientDisconnectedError
         return task.result()
     finally:
+        finished.set()
         task.cancel()
         watcher.cancel()
         await asyncio.gather(task, watcher, return_exceptions=True)

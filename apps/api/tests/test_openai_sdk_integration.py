@@ -9,6 +9,7 @@ from llm.client import OllamaClient
 from llm.config import OllamaSettings
 from openai import AsyncOpenAI, NotFoundError
 from openai.types.chat import ChatCompletionUserMessageParam
+from openai.types.responses import FunctionToolParam, ResponseInputItemParam
 
 pytestmark = pytest.mark.integration
 
@@ -66,3 +67,69 @@ async def test_streaming(sdk: AsyncOpenAI) -> None:
 async def test_unknown_model_raises_not_found(sdk: AsyncOpenAI) -> None:
     with pytest.raises(NotFoundError):
         await sdk.chat.completions.create(model="gpt-4o", messages=MESSAGES)
+
+
+async def test_responses_non_streaming(sdk: AsyncOpenAI) -> None:
+    response = await sdk.responses.create(
+        model=MODEL, input="Reply with one short word.", max_output_tokens=50
+    )
+
+    assert response.output_text
+    assert response.usage is not None
+    assert response.usage.total_tokens > 0
+
+
+async def test_responses_streaming(sdk: AsyncOpenAI) -> None:
+    stream = await sdk.responses.create(
+        model=MODEL,
+        input="Reply with one short word.",
+        max_output_tokens=50,
+        stream=True,
+    )
+
+    events = [event async for event in stream]
+
+    assert events[0].type == "response.created"
+    assert "".join(
+        event.delta for event in events if event.type == "response.output_text.delta"
+    )
+    assert events[-1].type in ("response.completed", "response.incomplete")
+
+
+async def test_responses_function_call_loop(sdk: AsyncOpenAI) -> None:
+    tools: list[FunctionToolParam] = [
+        {
+            "type": "function",
+            "name": "get_weather",
+            "description": "Get the weather for a city.",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+                "required": ["city"],
+            },
+            "strict": False,
+        }
+    ]
+    input_items: list[ResponseInputItemParam] = [
+        {"role": "user", "content": "What is the weather in Paris? Use the tool."}
+    ]
+
+    first = await sdk.responses.create(
+        model=MODEL, input=input_items, tools=tools, tool_choice="required"
+    )
+
+    [call] = [item for item in first.output if item.type == "function_call"]
+    input_items.append(
+        {
+            "type": "function_call",
+            "call_id": call.call_id,
+            "name": call.name,
+            "arguments": call.arguments,
+        }
+    )
+    input_items.append(
+        {"type": "function_call_output", "call_id": call.call_id, "output": "Sunny"}
+    )
+    second = await sdk.responses.create(model=MODEL, input=input_items, tools=tools)
+
+    assert second.output_text

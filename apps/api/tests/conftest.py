@@ -180,6 +180,10 @@ def _normalize_spec(node: Any) -> Any:
         for key, value in node.items()
         if key != "discriminator"
     }
+    # With discriminators gone, overlapping oneOf branches (EasyInputMessage vs
+    # InputMessage) would match twice and fail; anyOf still checks every branch.
+    if "oneOf" in out:
+        out["anyOf"] = out.pop("oneOf")
     if out.pop("nullable", False) is not True:
         return out
     if isinstance(out.get("type"), str):
