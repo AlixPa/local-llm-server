@@ -155,7 +155,8 @@ two toolchains do not mix.
   `method_not_allowed`) and `null` for unexpected 500s. No local enum of error kinds.
   Request-validation failures follow the same split: **400 `invalid_request_error`** on OpenAI
   paths (the SDK maps 400 and 422 to different exceptions), standard **422** on non-OpenAI paths.
-  (`api/errors.py` currently returns 422 everywhere — fix it with the first OpenAI endpoint.)
+  The exception handler in `api/errors.py` decides by path: every OpenAI-defined path must be
+  registered in its OpenAI-path set when its endpoint is added.
 - **Routing**: every endpoint — including local-only ones with no OpenAI counterpart — is
   mounted under `/v1`, no exceptions. Where an OpenAI counterpart exists, the path matches it
   exactly (e.g. `/v1/chat/completions`, `/v1/batches`, `/v1/files`). This is what makes the
@@ -172,10 +173,12 @@ two toolchains do not mix.
   FastAPI can't express "one Pydantic model or an SSE stream" as a single schema, so the return
   annotation is a union (`CreateChatCompletionResponse | StreamingResponse`) and the streaming
   branch's actual shape is governed by the **Streaming** convention below, not by the annotation.
-- **Streaming**: a `stream=true` endpoint is an `async def` generator yielding typed chunk models
-  (e.g. `ChatCompletionChunk` instances), serialized to `data: {...}\n\n` by a thin
-  `StreamingResponse` wrapper and terminated with `data: [DONE]\n\n`. Don't yield raw
-  pre-formatted strings from the generator itself.
+- **Streaming**: a `stream=true` endpoint is an `async def` generator yielding typed chunk/event
+  models (e.g. `ChatCompletionChunk` instances), serialized by a thin `StreamingResponse` wrapper.
+  The wire format of each endpoint is OpenAI's own for that endpoint, with zero deviation: chat
+  completions emit `data: {...}\n\n` frames terminated with `data: [DONE]\n\n`; Responses emits
+  `event: <type>\ndata: {...}\n\n` frames and no `[DONE]`. Don't yield raw pre-formatted strings
+  from the generator itself.
 - **Resource IDs**: mirror OpenAI's prefixed ID format exactly (e.g. `chatcmpl-<random>`,
   `batch_<random>`, `file-<random>`), generated with a short random suffix.
 - **Auth**: no API key required for now. The server is fully local, single-user. Don't add auth
@@ -370,6 +373,14 @@ it never touches SQLite, and any data it needs that no endpoint exposes means ad
 
 - **Workflow**: feature branch + pull request for every change, including solo work — no direct
   commits to `main`.
+- **Branch per spec**: spec-kit does not create branches. As soon as a new spec starts
+  (before or right when running `/speckit-specify`), Claude creates a feature branch from an
+  up-to-date `main`, named after the spec folder (e.g. `004-responses-endpoint`), and does all
+  the spec/plan/tasks/implementation work there. Never leave a new spec's files on `main`.
+- **Spec commit**: the spec artifacts (`specs/NNN-*/`) are not committed piecemeal while
+  spec/plan/tasks are being written or corrected. When the user says so (after the tasks
+  review/correction), commit the whole spec folder as a single commit. Implementation commits
+  follow the normal granularity rule below.
 - **Commit messages**: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`,
   `chore:`, etc.), short imperative summary line.
 - **Commit granularity**: one atomic commit per logical change. Don't bundle unrelated changes
